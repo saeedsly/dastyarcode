@@ -176,6 +176,20 @@
     <!-- ============ settings view ============ -->
     <section class="view" id="view-settings">
       <div class="settings-grid">
+        <div class="setup-banner" id="setupBanner" hidden>
+          <b>👋 خوش آمدی!</b>
+          الان در <b>حالت نمایشی</b> هستی (بدون کلید و بدون اینترنت) تا فقط برنامه را ببینی.
+          برای اینکه دستیار واقعاً همه‌کاره شود، یکی از گزینه‌های زیر را انتخاب کن —
+          <b>OpenRouter، Gemini و Groq رایگان شروع می‌شوند</b>.
+          <div class="preset-row">
+            <button class="preset" data-provider="openrouter" data-model="google/gemini-2.5-flash">OpenRouter <small>رایگان</small></button>
+            <button class="preset" data-provider="gemini" data-model="gemini-2.5-flash">Google Gemini <small>رایگان</small></button>
+            <button class="preset" data-provider="groq" data-model="llama-3.3-70b-versatile">Groq <small>رایگان و سریع</small></button>
+            <button class="preset" data-provider="ollama" data-model="qwen3:8b">Ollama <small>آفلاین</small></button>
+            <button class="preset" data-provider="openai" data-model="gpt-4o-mini">OpenAI</button>
+          </div>
+        </div>
+
         <div class="box">
           <h3>🔑 اتصال به هوش مصنوعی</h3>
           <label class="field">

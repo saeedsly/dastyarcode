@@ -1,0 +1,106 @@
+name: build-windows-exe
+
+# Builds dist\Dastyar\Dastyar.exe on real Windows runners and attaches a zip to
+# the GitHub Release.  Trigger it manually from the Actions tab, or push a tag.
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: exe on ${{ matrix.os }} / py${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2019          # real Windows Server 2019 (win 10 kernel)
+            python: "3.8"
+            label: win-10-11
+          - os: windows-2022
+            python: "3.8"
+            label: win-11
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          architecture: x64
+
+      - name: Install PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "pyinstaller==5.13.2"
+
+      - name: Run tests first (never ship a broken exe)
+        run: python -m unittest discover -s tests -v
+
+      - name: Build
+        run: pyinstaller --noconfirm --clean dastyar.spec
+
+      - name: Smoke test the exe
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path "dist\Dastyar\Dastyar.exe").Path
+          Write-Host "exe size: $((Get-Item $exe).Length) bytes"
+          # the exe is a windowed/GUI build, so Start-Process -Wait is the only
+          # reliable way to get its exit code (no console attached).
+          $p = Start-Process -FilePath $exe -ArgumentList "--version" -Wait -PassThru
+          Write-Host "exit code: $($p.ExitCode)"
+          if ($p.ExitCode -ne 0) { throw "Dastyar.exe --version exited $($p.ExitCode)" }
+
+      - name: Smoke test the HTTP server inside the exe
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path "dist\Dastyar\Dastyar.exe").Path
+          $p = Start-Process -FilePath $exe `
+            -ArgumentList "serve","--port","8599","--no-browser" -PassThru
+          $ok = $false
+          foreach ($i in 1..40) {
+            Start-Sleep -Milliseconds 500
+            try {
+              $r = Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:8599/api/health" -TimeoutSec 2
+              if ($r.StatusCode -eq 200) { Write-Host $r.Content; $ok = $true; break }
+            } catch { }
+          }
+          Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          if (-not $ok) { throw "bundled server did not answer on port 8599" }
+
+      - name: Add launcher + readme to the package
+        shell: pwsh
+        run: |
+          Copy-Item installer\Dastyar.cmd dist\Dastyar\ -Force
+          Copy-Item installer\Doctor.cmd  dist\Dastyar\ -Force
+          Copy-Item README.md             dist\Dastyar\ -Force
+          @"
+          دستیار — نسخه‌ی قابل حمل (Portable)
+          ====================================
+          ۱) روی Dastyar.exe دوبار کلیک کن.
+          ۲) اگر ویندوز هشدار SmartScreen داد: More info -> Run anyway
+          ۳) در صفحه‌ی تنظیمات یک کلید رایگان (OpenRouter / Gemini / Groq) بگذار.
+          داده‌ها: %APPDATA%\Dastyar
+          "@ | Out-File -Encoding utf8 dist\Dastyar\شروع-کن.txt
+
+      - name: Zip the package
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist\Dastyar\* `
+            -DestinationPath "Dastyar-${{ matrix.label }}-x64.zip" -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Dastyar-${{ matrix.label }}-x64
+          path: Dastyar-${{ matrix.label }}-x64.zip
+          if-no-files-found: error
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: Dastyar-${{ matrix.label }}-x64.zip
+          generate_release_notes: true

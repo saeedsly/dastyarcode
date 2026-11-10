@@ -359,6 +359,55 @@ def find_python() -> str:
     return sys.executable or "python"
 
 
+def enable_console_safety() -> None:
+    """A windowed (console=False) exe has sys.stdout/stderr == None.
+
+    Any ``print`` would then raise AttributeError and kill the app, so we point
+    them at a null sink (and keep a log file when one is configured).
+    """
+    import io
+
+    class _Sink(io.TextIOBase):
+        def __init__(self, log_path=None):
+            self._log = None
+            if log_path:
+                try:
+                    self._log = open(log_path, "a", encoding="utf-8", errors="replace")
+                except OSError:
+                    self._log = None
+
+        def write(self, text):  # type: ignore[override]
+            if self._log is not None:
+                try:
+                    self._log.write(text)
+                    self._log.flush()
+                except OSError:
+                    pass
+            return len(text)
+
+        def flush(self):  # type: ignore[override]
+            if self._log is not None:
+                try:
+                    self._log.flush()
+                except OSError:
+                    pass
+
+        def isatty(self):  # type: ignore[override]
+            return False
+
+    log = None
+    try:
+        log_dir = data_dir() / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log = str(log_dir / "dastyar.log")
+    except Exception:
+        log = None
+    if sys.stdout is None:
+        sys.stdout = _Sink(log)
+    if sys.stderr is None:
+        sys.stderr = _Sink(log)
+
+
 def is_frozen() -> bool:
     return bool(getattr(sys, "frozen", False))
 
@@ -370,9 +419,23 @@ def app_root() -> Path:
 
 
 def bundled_path(*parts: str) -> Path:
-    """Resource that lives next to the app (works for source and PyInstaller)."""
+    """Resource that lives next to the app (works for source and PyInstaller).
+
+    PyInstaller collects ``datas`` under ``<root>/dastyar/...``, while a source
+    checkout keeps them at ``<root>/dastyar/...`` too, so both spellings are
+    tried before falling back to the first candidate.
+    """
     root = Path(getattr(sys, "_MEIPASS", app_root()))
-    return root.joinpath(*parts)
+    candidates = [root.joinpath(*parts)]
+    if parts and parts[0] != "dastyar":
+        candidates.append(root.joinpath("dastyar", *parts))
+    for cand in candidates:
+        try:
+            if cand.exists():
+                return cand
+        except OSError:
+            continue
+    return candidates[0]
 
 
 def open_path(path: str) -> None:

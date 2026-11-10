@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import os
 import struct
+import sys
 import zlib
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
@@ -40,10 +41,27 @@ def font_candidates() -> List[Path]:
         Path("/System/Library/Fonts/Supplemental/Tahoma.ttf"),
         Path("/Library/Fonts/Arial Unicode.ttf"),
     ]
-    bundled = Path(__file__).resolve().parent.parent / "assets"
-    if bundled.exists():
-        # the bundled Vazirmatn is a proper Persian font: prefer it over system fonts
-        out = sorted(bundled.glob("*.ttf")) + out
+    # the bundled Vazirmatn is a proper Persian font: prefer it over system
+    # fonts.  Try every plausible location (source tree, PyInstaller onedir /
+    # onefile, zip-import) before falling back to the OS.
+    roots = [
+        Path(__file__).resolve().parent.parent / "assets",
+        Path(getattr(sys, "_MEIPASS", "")) / "dastyar" / "assets",
+        Path(getattr(sys, "executable", "")).resolve().parent / "dastyar" / "assets",
+        Path(getattr(sys, "executable", "")).resolve().parent / "_internal" / "dastyar" / "assets",
+    ]
+    for bundled in roots:
+        try:
+            if bundled.is_dir():
+                ttfs = list(bundled.glob("*.ttf"))
+                # body text should be the Regular weight, not Bold
+                ttfs.sort(key=lambda p: (0 if "regular" in p.name.lower() else
+                                         1 if "bold" in p.name.lower() else 2, p.name))
+                if ttfs:
+                    out = ttfs + out
+                    break
+        except OSError:
+            continue
     return [p for p in out if p.exists() and p.stat().st_size < 20 * 1024 * 1024]
 
 

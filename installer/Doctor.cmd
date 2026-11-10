@@ -3,6 +3,7 @@ chcp 65001 >nul 2>&1
 title دستیار — بررسی سلامت
 set "APPDIR=%~dp0"
 set "APPDIR=%APPDIR:~0,-1%"
+cd /d "%APPDIR%"
 if exist "%APPDIR%\runtime\python.exe" (
   "%APPDIR%\runtime\python.exe" -m dastyar doctor
 ) else (

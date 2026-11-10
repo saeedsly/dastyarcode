@@ -307,6 +307,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list = None) -> int:
+    try:
+        from .config import enable_console_safety
+        enable_console_safety()
+    except Exception:
+        pass
     argv = list(sys.argv[1:] if argv is None else argv)
     parser = build_parser()
     args = parser.parse_args(argv)

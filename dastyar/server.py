@@ -6,6 +6,7 @@ import mimetypes
 import os
 import queue
 import socket
+import sys
 import threading
 import time
 import urllib.parse
@@ -31,7 +32,22 @@ from .tools.memory import load_memory
 from .tools.schedule import start_reminder_thread
 from .utils import human_size, run, truncate
 
-STATIC = Path(__file__).resolve().parent / "web"
+def _static_dir() -> Path:
+    """Locate the bundled web UI for source, onedir and onefile builds."""
+    here = Path(__file__).resolve().parent / "web"
+    if here.is_dir():
+        return here
+    for base in (getattr(sys, "_MEIPASS", ""), str(Path(sys.executable).resolve().parent),
+                 str(Path(sys.executable).resolve().parent / "_internal")):
+        if not base:
+            continue
+        cand = Path(base) / "dastyar" / "web"
+        if cand.is_dir():
+            return cand
+    return here
+
+
+STATIC = _static_dir()
 MAX_UPLOAD = 25 * 1024 * 1024
 
 

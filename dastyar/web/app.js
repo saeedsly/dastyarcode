@@ -595,6 +595,8 @@
     $('#sttEngine').value = s.stt_engine || 'auto';
     $('#systemPrompt').value = s.system_prompt || '';
     $('#modelName').textContent = `${s.provider_label || s.provider} · ${s.model || '—'}`;
+    const banner = $('#setupBanner');
+    if (banner) banner.hidden = !(s.provider === 'demo' || !s.has_key);
     $('#hintText').textContent = `مدل: ${s.model || '—'} • سیاست: ${({ ask: 'بپرس', auto: 'خودکار', readonly: 'فقط خواندنی' })[s.policy] || s.policy}`;
   }
 
@@ -631,6 +633,16 @@
     const res = await api('/api/settings', { method: 'POST', body: { settings: { system_prompt: $('#systemPrompt').value } } });
     if (res.ok) toast('شخصیت ذخیره شد', 'ok');
   };
+  $$('.preset').forEach(btn => btn.onclick = () => {
+    const name = btn.dataset.provider;
+    const sel = $('#provider');
+    sel.value = name;
+    sel.onchange();
+    if (btn.dataset.model) $('#model').value = btn.dataset.model;
+    $('#apiKey').focus();
+    toast(`«${name}» انتخاب شد — کلید را بچسبان و ذخیره کن`, 'ok');
+  });
+
   $('#testConn').onclick = async () => {
     $('#testResult').textContent = 'در حال تست…';
     const res = await api('/api/test-connection', { method: 'POST', body: {} });

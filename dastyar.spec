@@ -21,11 +21,12 @@ hiddenimports = [
     "dastyar.tools.media", "dastyar.tools.speak", "dastyar.tools.code_runner",
     "dastyar.tools.windows_ui", "dastyar.tools.registry", "dastyar.tools.schedule",
     "dastyar.tools.memory", "dastyar.tools.notes", "dastyar.tools.dev",
-    "dastyar.tools.fun", "dastyar.tools.pdfkit",
+    "dastyar.tools.fun", "dastyar.tools.pdfkit", "dastyar.gui_entry", "dastyar.desktop",
+    "dastyar.winhelp", "dastyar.doctor",
 ]
 
 a = Analysis(  # noqa: F821
-    [str(ROOT / "dastyar" / "__main__.py")],
+    [str(ROOT / "dastyar" / "gui_entry.py")],
     pathex=[str(ROOT)],
     binaries=[],
     datas=datas,

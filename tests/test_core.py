@@ -409,3 +409,41 @@ class TestCancellation(unittest.TestCase):
             self.assertEqual(s.get("policy"), "whatever")  # storage is dumb
             # validation lives in the HTTP layer; make sure defaults stay sane
             self.assertIn(DEFAULTS["policy"], ("ask", "auto", "readonly"))
+
+
+class TestFrozenBuildSafety(unittest.TestCase):
+    """A PyInstaller windowed exe has sys.stdout/stderr set to None."""
+
+    def test_console_shim_survives_none_streams(self):
+        import io
+        import sys as _sys
+        from unittest import mock
+
+        from dastyar import config as cfg
+
+        saved_out, saved_err = _sys.stdout, _sys.stderr
+        try:
+            with mock.patch.dict(os.environ, {"DASTYAR_DATA": tempfile.mkdtemp()}):
+                _sys.stdout = None
+                _sys.stderr = None
+                cfg.enable_console_safety()
+                self.assertIsNotNone(_sys.stdout)
+                self.assertIsNotNone(_sys.stderr)
+                print("hello from a windowed build")   # must not raise
+                _sys.stdout.flush()
+        finally:
+            _sys.stdout, _sys.stderr = saved_out, saved_err
+            # restore real streams for the rest of the suite
+            _sys.stdout = saved_out or io.TextIOWrapper(io.BytesIO(), encoding="utf-8")
+            _sys.stderr = saved_err or _sys.stdout
+
+    def test_bundled_assets_are_found_relative_to_the_package(self):
+        from dastyar import config as cfg
+        from dastyar.server import STATIC
+        from dastyar.tools.pdfkit import font_candidates
+
+        self.assertTrue((STATIC / "index.html").is_file())
+        self.assertTrue((cfg.app_root() / "dastyar").is_dir() or cfg.is_frozen())
+        fonts = font_candidates()
+        self.assertTrue(fonts, "at least one usable font must exist")
+        self.assertTrue(any("vazirmatn" in f.name.lower() for f in fonts))

@@ -314,3 +314,22 @@ textarea.input { resize: vertical; line-height: 1.8; }
   .composer-wrap { padding: 6px 10px 10px; }
 }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* ---------- first-run setup banner ---------- */
+.setup-banner {
+  grid-column: 1 / -1;
+  padding: 16px 18px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(110, 168, 255, .35);
+  background: linear-gradient(120deg, rgba(110,168,255,.16), rgba(167,139,250,.12));
+  font-size: .88rem; line-height: 2;
+}
+.setup-banner b { color: var(--fg); }
+.preset-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.preset {
+  padding: 7px 14px; border-radius: 999px; font-size: .82rem;
+  border: 1px solid var(--line-strong); background: var(--panel-solid);
+  transition: .16s;
+}
+.preset:hover { border-color: var(--brand); transform: translateY(-1px); }
+.preset small { color: var(--muted); font-size: .7rem; }

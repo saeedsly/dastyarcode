@@ -4,6 +4,7 @@ setlocal
 title دستیار
 set "APPDIR=%~dp0"
 set "APPDIR=%APPDIR:~0,-1%"
+cd /d "%APPDIR%"
 if exist "%APPDIR%\runtime\python.exe" (
   "%APPDIR%\runtime\python.exe" -m dastyar run %*
   exit /b %errorlevel%

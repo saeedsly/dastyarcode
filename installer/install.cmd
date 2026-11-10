@@ -39,11 +39,13 @@ if exist "%PY%" (
 set "SYSPY="
 for %%P in (python.exe py.exe) do (
   if not defined SYSPY (
-    where %%P >nul 2>&1 && set "SYSPY=%%P"
+    for /f "delims=" %%F in ('where %%P 2^>nul') do (
+      if not defined SYSPY set "SYSPY=%%F"
+    )
   )
 )
 if defined SYSPY (
-  for /f "tokens=2 delims= " %%V in ('%SYSPY% -V 2^>^&1') do set "PYV=%%V"
+  for /f "tokens=2 delims= " %%V in ('"%SYSPY%" -V 2^>^&1') do set "PYV=%%V"
   echo [1/4] Found system Python: !PYV!
   echo.
   echo   گزینه‌ها:
@@ -92,8 +94,32 @@ set "PY=%PYDIR%\python.exe"
 
 :deps
 echo.
+echo [2/4] Preparing package manager...
+
+:: The embedded Python has no pip: bootstrap it (needs the "import site"
+:: line we just wrote into python38._pth).
+"%PY%" -m pip --version >nul 2>&1
+if not errorlevel 1 goto :deps_install
+if exist "%PYDIR%\python38._pth" findstr /C:"import site" "%PYDIR%\python38._pth" >nul 2>&1
+if not errorlevel 1 goto :pip_ready
+if exist "%PYDIR%\python38._pth" >>"%PYDIR%\python38._pth" echo import site
+:pip_ready
+echo   downloading pip bootstrap...
+powershell -NoProfile -Command "$ProgressPreference='SilentlyContinue'; try { Invoke-WebRequest -Uri 'https://bootstrap.pypa.io/pip/3.8/get-pip.py' -OutFile '%TEMP%\get-pip.py' -UseBasicParsing } catch { exit 1 }"
+if errorlevel 1 (
+  echo    - pip نصب نشد ^(برنامه بدون بسته‌های اختیاری هم کار می‌کند^)
+  goto :deps_done
+)
+"%PY%" "%TEMP%\get-pip.py" --quiet --disable-pip-version-check --no-warn-script-location >nul 2>&1
+del /q "%TEMP%\get-pip.py" >nul 2>&1
+"%PY%" -m pip --version >nul 2>&1
+if errorlevel 1 (
+  echo    - pip نصب نشد ^(برنامه بدون بسته‌های اختیاری هم کار می‌کند^)
+  goto :deps_done
+)
+
+:deps_install
 echo [2/4] Installing optional quality packages ^(voice, browser, window^)...
-"%PY%" -m pip install --quiet --disable-pip-version-check --no-warn-script-location --upgrade pip >nul 2>&1
 "%PY%" -m pip install --quiet --disable-pip-version-check --no-warn-script-location edge-tts >nul 2>&1
 if errorlevel 1 echo    - edge-tts نصب نشد ^(صدا با SAPI ویندوز کار می‌کند^)
 "%PY%" -m pip install --quiet --disable-pip-version-check --no-warn-script-location pywebview >nul 2>&1

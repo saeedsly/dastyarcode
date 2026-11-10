@@ -37,7 +37,29 @@ jobs:
 
       - name: Run unit + end-to-end tests (no dependencies)
         shell: bash
-        run: python -m unittest discover -s tests -v 2>&1 | tee tests.log
+        run: |
+          set -o pipefail
+          python -m unittest discover -s tests -v 2>&1 | tee tests.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            # surface the failure as a GitHub annotation so it can be read
+            # even when raw logs are unavailable
+            echo "::error::test failures follow"
+            python - <<'PYEOF'
+          import re
+          try:
+              lines = open("tests.log", encoding="utf-8", errors="replace").read().splitlines()
+          except OSError:
+              raise SystemExit(0)
+          hits = [l for l in lines if re.match(r"^(FAIL|ERROR):", l)]
+          for line in hits[:10]:
+              print("::error file=tests,title=test failure::" + line[:300])
+          tail = [l for l in lines if l.startswith(("AssertionError", "Traceback", "  File"))][:20]
+          for line in tail:
+              print("::error::" + line[:300].replace("\n", " "))
+          PYEOF
+          fi
+          exit "$status"
 
       - name: Upload test log (always, even when red)
         if: always()
@@ -48,6 +70,17 @@ jobs:
             tests.log
             *.txt
           if-no-files-found: ignore
+
+      - name: Publish the failure reason in the job summary
+        if: failure()
+        shell: bash
+        run: |
+          {
+            echo "## ❌ Test failure details"
+            echo '```'
+            grep -E -A 12 "^(FAIL|ERROR):" tests.log | head -80 || echo "no FAIL/ERROR lines"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: CLI smoke test
         shell: bash

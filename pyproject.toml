@@ -1,0 +1,65 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dastyar"
+version = "1.0.0"
+description = "دستیار — a local-first, Persian-speaking AI agent for every Windows (7/8/8.1/10/11) with 120+ real tools"
+readme = "README.md"
+requires-python = ">=3.7"
+license = { text = "MIT" }
+authors = [{ name = "Dastyar contributors" }]
+keywords = ["ai", "agent", "assistant", "windows", "persian", "farsi", "llm", "automation", "offline"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.7",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: Microsoft :: Windows :: Windows 7",
+  "Operating System :: Microsoft :: Windows :: Windows 10",
+  "Operating System :: Microsoft :: Windows :: Windows 11",
+  "Operating System :: POSIX :: Linux",
+  "Operating System :: MacOS",
+  "Natural Language :: Persian",
+  "Topic :: Desktop Environment",
+  "Topic :: Utilities",
+]
+dependencies = []
+
+[project.optional-dependencies]
+# everything nice-to-have; the app runs with zero dependencies
+full = ["edge-tts>=6.1", "faster-whisper>=1.0", "playwright>=1.40", "pywebview>=4.4"]
+voice = ["edge-tts>=6.1"]
+browser = ["playwright>=1.40"]
+window = ["pywebview>=4.4"]
+dev = ["pytest>=7", "build>=1.0"]
+
+[project.scripts]
+dastyar = "dastyar.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/saeedsly/dastyarcode"
+Issues = "https://github.com/saeedsly/dastyarcode/issues"
+Source = "https://github.com/saeedsly/dastyarcode"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["dastyar*"]
+
+[tool.setuptools.package-data]
+dastyar = [
+  "web/*.html",
+  "web/*.css",
+  "web/*.js",
+  "web/*.svg",
+  "web/fonts/*",
+  "assets/*",
+]

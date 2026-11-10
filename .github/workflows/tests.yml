@@ -1,0 +1,55 @@
+name: tests
+
+on:
+  push:
+    branches: [main, "arena/**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: py${{ matrix.python }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.8", "3.11", "3.12"]
+        exclude:
+          - os: macos-latest
+            python: "3.8"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Show environment
+        run: python -c "import sys, platform; print(sys.version); print(platform.platform())"
+
+      - name: Compile all modules (catches syntax errors on old Pythons)
+        run: python -m compileall -q dastyar tests
+
+      - name: Run unit + end-to-end tests (no dependencies)
+        run: python -m unittest discover -s tests -v
+
+      - name: CLI smoke test
+        shell: bash
+        run: |
+          python -m dastyar --version
+          python -m dastyar tools | head -5
+          python -m dastyar config provider demo
+          DASTYAR_DATA="$RUNNER_TEMP/dd" python -m dastyar doctor || true
+
+      - name: Build sdist/wheel
+        if: matrix.python == '3.11' && matrix.os == 'ubuntu-latest'
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build
+
+      - uses: actions/upload-artifact@v4
+        if: matrix.python == '3.11' && matrix.os == 'ubuntu-latest'
+        with:
+          name: dist
+          path: dist/*

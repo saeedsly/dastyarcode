@@ -335,6 +335,14 @@ def main(argv: list = None) -> int:
     except KeyboardInterrupt:
         print("\nلغو شد.")
         return 130
+    except BrokenPipeError:
+        # `dastyar tools | head` closes the pipe early — that is not an error
+        try:
+            devnull = os.open(os.devnull, os.O_WRONLY)
+            os.dup2(devnull, sys.stdout.fileno())
+        except Exception:
+            pass
+        return 0
 
 
 if __name__ == "__main__":

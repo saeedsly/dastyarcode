@@ -96,7 +96,8 @@ class TestFiles(TempHome):
         self.assertIn("notes.txt", res["output"])
 
     def test_sandbox_blocks_outside_paths(self):
-        res = self.run_tool("read_file", path="/etc/passwd")
+        outside = "C:\\Windows\\win.ini" if os.name == "nt" else "/etc/passwd"
+        res = self.run_tool("read_file", path=outside)
         self.assertFalse(res["ok"])
         self.assertIn("مجاز نیست", res["error"])
 
@@ -130,6 +131,19 @@ class TestFiles(TempHome):
         self.assertTrue(res["ok"], res)
         out = self.run_tool("read_csv", path=str(p))["output"]
         self.assertIn("الف", out)
+
+    def test_allowed_path_survives_symlinked_roots(self):
+        """On macOS /tmp is a symlink to /private/tmp; resolved paths must match."""
+        import os as _os
+
+        target = Path(_os.path.realpath(str(self.home / "x.txt")))
+        res = self.run_tool("write_file", path=str(self.home / "x.txt"), content="hi")
+        self.assertTrue(res["ok"], res)
+        self.assertTrue(target.parent.exists())
+        # a path expressed through the *unresolved* spelling must still be inside
+        self.settings.set("allowed_paths", [str(self.home)])
+        ok = self.run_tool("read_file", path=str(self.home / "x.txt"))
+        self.assertTrue(ok["ok"], ok)
 
     def test_find_files(self):
         (self.home / "x.pdf").write_text("pdf", encoding="utf-8")
@@ -378,9 +392,6 @@ class TestHttpApi(unittest.TestCase):
                 self.assertIn("handleEvent", r.read().decode())
 
 
-if __name__ == "__main__":
-    unittest.main(verbosity=2)
-
 
 class TestCancellation(unittest.TestCase):
     def test_cancel_stops_the_loop(self):
@@ -447,3 +458,8 @@ class TestFrozenBuildSafety(unittest.TestCase):
         fonts = font_candidates()
         self.assertTrue(fonts, "at least one usable font must exist")
         self.assertTrue(any("vazirmatn" in f.name.lower() for f in fonts))
+
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

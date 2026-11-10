@@ -407,6 +407,25 @@ def enable_console_safety() -> None:
     if sys.stderr is None:
         sys.stderr = _Sink(log)
 
+    # Windows terminals default to a legacy code page (cp1252/cp437/cp1256) and
+    # a redirected stdout uses the *locale* encoding, so printing Persian would
+    # either crash with UnicodeEncodeError or show mojibake.  UTF-8 everywhere.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
+    if IS_WINDOWS:
+        try:  # make cmd.exe render the Persian output correctly
+            import ctypes
+
+            kernel32 = ctypes.windll.kernel32
+            kernel32.SetConsoleOutputCP(65001)
+            kernel32.SetConsoleCP(65001)
+        except Exception:
+            pass
+
 
 def is_frozen() -> bool:
     return bool(getattr(sys, "frozen", False))

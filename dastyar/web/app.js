@@ -41,10 +41,14 @@
   /* ---------------- api ---------------- */
   async function api(path, opts = {}) {
     const res = await fetch(path, {
+      credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       ...opts,
       body: opts.body ? JSON.stringify(opts.body) : undefined,
     });
+    if (res.status === 401) {
+      toast('کد دسترسی لازم است — صفحه را دوباره باز کن', 'err');
+    }
     const ct = res.headers.get('content-type') || '';
     if (!ct.includes('json')) return res.text();
     return res.json();
@@ -245,7 +249,7 @@
   /* ---------------- SSE ---------------- */
   function connectEvents() {
     if (state.es) state.es.close();
-    const es = new EventSource('/api/events');
+    const es = new EventSource('/api/events', { withCredentials: true });
     state.es = es;
     es.onopen = () => setStatus(true, 'متصل');
     es.onerror = () => setStatus(false, 'قطع شد — تلاش مجدد…');

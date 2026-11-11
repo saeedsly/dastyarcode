@@ -103,7 +103,12 @@ DEFAULTS: Dict[str, Any] = {
     "tts_voice": "",
     "stt_engine": "auto",  # auto | windows | openai | whisper | off
     "web_search": {"provider": "duckduckgo", "api_key": ""},
-    "ui": {"port": 8577, "host": "0.0.0.0", "open_browser": True, "theme": "auto"},
+    # 127.0.0.1 keeps the assistant private to this PC: no firewall prompt and
+    # nobody else on the network can drive your computer.  Set "0.0.0.0" (or
+    # `dastyar serve --host 0.0.0.0 --token ...`) only if you really want the
+    # phone-on-same-Wi-Fi setup.
+    "ui": {"port": 8577, "host": "127.0.0.1", "open_browser": True, "theme": "auto",
+           "token": ""},
     "hotkey": "ctrl+alt+space",
     "system_prompt": "",
     "auto_skills": True,

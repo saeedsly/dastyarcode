@@ -5,6 +5,7 @@ import json
 import mimetypes
 import os
 import queue
+import secrets
 import socket
 import sys
 import threading
@@ -105,6 +106,60 @@ def make_handler(app: App):
                 except Exception:
                     pass
 
+        # ---- LAN access token --------------------------------------
+        def _wanted_token(self) -> str:
+            return os.environ.get("DASTYAR_TOKEN") or ""
+
+        def _given_token(self) -> str:
+            header = self.headers.get("X-Dastyar-Token") or ""
+            if not header:
+                auth = self.headers.get("Authorization") or ""
+                if auth.lower().startswith("bearer "):
+                    header = auth[7:]
+            if not header:
+                qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+                header = (qs.get("token") or [""])[0]
+            if not header:
+                for part in (self.headers.get("Cookie") or "").split(";"):
+                    name, _, val = part.strip().partition("=")
+                    if name == "dastyar_token":
+                        header = val
+            return header
+
+        def _auth_ok(self) -> bool:
+            """True when the request may proceed.
+
+            A token is only enforced when the server is reachable from the
+            network (host != loopback); otherwise anything on this PC — i.e.
+            you — is implicitly trusted, exactly like every other desktop app.
+            """
+            want = self._wanted_token()
+            if not want:
+                return True
+            if secrets.compare_digest(self._given_token(), want):
+                return True
+            return False
+
+        def _reject_token(self) -> None:
+            # asks the browser for the token once, then keeps it in a cookie
+            body = ("<!doctype html><html lang='fa' dir='rtl'><meta charset='utf-8'>"
+                    "<title>دستیار — نیاز به کد دسترسی</title>"
+                    "<body style='font-family:system-ui;background:#0f1420;color:#e6edf7;"
+                    "display:grid;place-items:center;height:100vh;margin:0'>"
+                    "<form method='get' style='text-align:center'>"
+                    "<h2>🔒 کد دسترسی</h2>"
+                    "<p style='color:#8b98ad'>این نمونه روی شبکه باز شده است.</p>"
+                    "<input name='token' autofocus style='padding:10px 14px;border-radius:10px;"
+                    "border:1px solid #2a3550;background:#161d2b;color:#fff;min-width:260px'>"
+                    "<button style='padding:10px 18px;margin-inline-start:8px;border-radius:10px;"
+                    "border:0;background:#4c8dff;color:#fff;cursor:pointer'>ورود</button>"
+                    "</form></body></html>").encode("utf-8")
+            self.send_response(401)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
         def _cors(self) -> None:
             self.send_header("Access-Control-Allow-Origin", "*")
             self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
@@ -183,6 +238,22 @@ def make_handler(app: App):
             parsed = urllib.parse.urlparse(self.path)
             path = parsed.path
             query = urllib.parse.parse_qs(parsed.query)
+            if self._wanted_token() and not self._auth_ok():
+                # the page itself may load (it shows the token form); anything
+                # that touches data or settings requires the cookie
+                if path in ("/", "/index.html"):
+                    return self.send_file(STATIC / "index.html")
+                return self._reject_token()
+            if query.get("token") and self._wanted_token() and self._auth_ok():
+                # remember it, then drop it from the address bar
+                target = parsed._replace(query="").geturl() or "/"
+                self.send_response(302)
+                self.send_header("Location", target)
+                self.send_header("Set-Cookie", "dastyar_token=%s; Path=/; SameSite=Lax; HttpOnly"
+                                 % query["token"][0])
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
             try:
                 if path == "/api/health":
                     return self.send_json({
@@ -259,6 +330,8 @@ def make_handler(app: App):
                     pass
 
         def do_POST(self) -> None:  # noqa: N802
+            if self._wanted_token() and not self._auth_ok():
+                return self.send_json({"ok": False, "error": "کد دسترسی نامعتبر است"}, 401)
             parsed = urllib.parse.urlparse(self.path)
             path = parsed.path
             body = self.read_json()
@@ -476,12 +549,29 @@ def make_handler(app: App):
     return Handler
 
 
+def _lan_ip() -> str:
+    """Best-effort local IP address (no traffic is actually sent)."""
+    try:
+        probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            probe.connect(("8.8.8.8", 80))
+            return probe.getsockname()[0]
+        finally:
+            probe.close()
+    except Exception:
+        return "127.0.0.1"
+
+
 def _find_free_port(host: str, start: int, tries: int = 30) -> int:
+    if host in ("0.0.0.0", "::", ""):
+        probe_host = ""          # any interface
+    else:
+        probe_host = host
     for port in range(start, start + tries):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            s.bind(("0.0.0.0", port))
+            s.bind((probe_host, port))
             return port
         except OSError:
             continue
@@ -494,7 +584,14 @@ def serve(settings: Settings, port: Optional[int] = None, host: Optional[str] = 
           open_browser: bool = True, quiet: bool = False) -> None:
     ensure_data_dir()
     port = int(port or settings.get("ui.port") or 8577)
-    host = host or settings.get("ui.host") or "0.0.0.0"
+    host = host or settings.get("ui.host") or "127.0.0.1"
+    if host in ("0.0.0.0", "::", ""):
+        # exposed on the network: allow http://<ip>:<port>?token=... access
+        token = os.environ.get("DASTYAR_TOKEN") or settings.get("ui.token") or ""
+        if not token:
+            token = secrets.token_urlsafe(18)
+            settings.set("ui.token", token, save=True)
+        os.environ["DASTYAR_TOKEN"] = token
     port = _find_free_port(host, port)
     app = App(settings)
     start_reminder_thread()
@@ -517,6 +614,13 @@ def serve(settings: Settings, port: Optional[int] = None, host: Optional[str] = 
         print("\n  دستیار %s آماده است 🚀" % __version__)
         print("  ─────────────────────────────────")
         print("  آدرس:  %s" % local_url)
+        if host not in ("127.0.0.1", "localhost"):
+            lan_ip = _lan_ip()
+            token = os.environ.get("DASTYAR_TOKEN", "")
+            print("  شبکه:  http://%s:%d" % (lan_ip, port))
+            if token:
+                print("  کد:    %s" % token)
+            print("  ⚠️  این نمونه از شبکه در دسترس است — کد بالا را با کسی شریک نشو.")
         print("  بستن:  Ctrl+C\n")
     if open_browser:
         def opener() -> None:

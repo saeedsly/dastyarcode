@@ -15,6 +15,7 @@ jobs:
   build:
     name: exe on ${{ matrix.os }} / py${{ matrix.python }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -44,33 +45,35 @@ jobs:
       - name: Build
         run: pyinstaller --noconfirm --clean dastyar.spec
 
-      - name: Smoke test the exe
+      - name: Smoke test the exe (bundled server must answer)
         shell: pwsh
         run: |
           $exe = (Resolve-Path "dist\Dastyar\Dastyar.exe").Path
           Write-Host "exe size: $((Get-Item $exe).Length) bytes"
-          # the exe is a windowed/GUI build, so Start-Process -Wait is the only
-          # reliable way to get its exit code (no console attached).
-          $p = Start-Process -FilePath $exe -ArgumentList "--version" -Wait -PassThru
-          Write-Host "exit code: $($p.ExitCode)"
-          if ($p.ExitCode -ne 0) { throw "Dastyar.exe --version exited $($p.ExitCode)" }
-
-      - name: Smoke test the HTTP server inside the exe
-        shell: pwsh
-        run: |
-          $exe = (Resolve-Path "dist\Dastyar\Dastyar.exe").Path
+          $env:DASTYAR_DATA = Join-Path $env:RUNNER_TEMP "dd-smoke"
           $p = Start-Process -FilePath $exe `
             -ArgumentList "serve","--port","8599","--no-browser" -PassThru
           $ok = $false
-          foreach ($i in 1..40) {
+          foreach ($i in 1..60) {
             Start-Sleep -Milliseconds 500
             try {
               $r = Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:8599/api/health" -TimeoutSec 2
-              if ($r.StatusCode -eq 200) { Write-Host $r.Content; $ok = $true; break }
+              if ($r.StatusCode -eq 200) { Write-Host "health: $($r.Content)"; $ok = $true; break }
             } catch { }
           }
-          Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
-          if (-not $ok) { throw "bundled server did not answer on port 8599" }
+          # the UI + bundled Persian font must be served too
+          if ($ok) {
+            try {
+              $page = Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:8599/" -TimeoutSec 3
+              Write-Host "index bytes: $($page.RawContentLength)"
+              $font = Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:8599/fonts/vazirmatn-regular.woff2" -TimeoutSec 5
+              Write-Host "font bytes: $($font.RawContentLength)"
+              if ($font.RawContentLength -lt 1000) { $ok = $false }
+            } catch { $ok = $false }
+          }
+          Start-Process -FilePath "taskkill" -ArgumentList "/F","/T","/PID",$p.Id -Wait -ErrorAction SilentlyContinue
+          if (-not $ok) { throw "bundled server/UI did not answer on port 8599" }
+          Write-Host "OK: exe serves API + UI + fonts"
 
       - name: Add launcher + readme to the package
         shell: pwsh

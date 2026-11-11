@@ -36,14 +36,16 @@ class TestWindowsHelper(unittest.TestCase):
             on_hotkey=lambda: opened.append(2),
             hotkey="ctrl+alt+f10",           # unlikely to clash with anything
         )
-        helper.start()
+        self.assertTrue(helper.start(), "helper failed to start: %s" % helper.error)
         try:
             self.assertTrue(helper._hwnd, "message window was not created")
-            # the icon must be visible in the notification area
             self.assertTrue(helper._icon_added, "tray icon could not be added")
         finally:
             helper.stop()
+        # stop() is synchronous: window gone, icon removed, thread finished
         self.assertFalse(helper._hwnd)
+        self.assertFalse(helper._icon_added)
+        self.assertFalse(helper._thread.is_alive(), "tray thread did not exit")
 
     def test_icon_file_is_valid_ico(self):
         from dastyar.config import bundled_path

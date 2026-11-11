@@ -114,21 +114,33 @@ class WindowsHelper:
     def start(self) -> bool:
         if not self.enabled:
             return False
-        if self._thread and self._thread.is_alive():
+        if self._thread and self._thread.is_alive() and self._hwnd:
             return True
+        self._ready.clear()
         self._thread = threading.Thread(target=self._run, name="dastyar-tray", daemon=True)
         self._thread.start()
         self._ready.wait(timeout=4)
         return self._hwnd is not None
 
-    def stop(self) -> None:
-        if not self.enabled or not self._hwnd:
+    def stop(self, timeout: float = 3.0) -> None:
+        """Close the message window and wait for the tray thread to exit.
+
+        Waiting matters: the notification-area icon is removed in the message
+        loop, so returning early would leave a ghost icon behind.
+        """
+        if not self.enabled:
             return
-        try:
-            user32 = ctypes.windll.user32
-            user32.PostMessageW(self._hwnd, WM_CLOSE, 0, 0)
-        except Exception:
-            pass
+        hwnd = self._hwnd
+        thread = self._thread
+        if hwnd:
+            try:
+                ctypes.windll.user32.PostMessageW(hwnd, WM_CLOSE, 0, 0)
+            except Exception:
+                pass
+        if thread is not None and thread.is_alive():
+            thread.join(timeout)
+        self._hwnd = None
+        self._icon_added = False
 
     # ------------------------------------------------------------------ #
     def _run(self) -> None:
@@ -137,6 +149,9 @@ class WindowsHelper:
         except Exception as exc:  # pragma: no cover
             self.error = str(exc)
             self._ready.set()
+        finally:
+            self._icon_added = False
+            self._hwnd = None
 
     def _loop(self) -> None:
         user32 = ctypes.windll.user32
@@ -198,6 +213,8 @@ class WindowsHelper:
                     self_ref._remove_icon()
                     user32.DestroyWindow(hwnd)
                     user32.PostQuitMessage(0)
+                    self_ref._hwnd = None      # the handle is gone now
+                    self_ref._ready.set()      # wake a waiting stop()
                     return 0
                 if msg == WM_DESTROY:
                     user32.PostQuitMessage(0)

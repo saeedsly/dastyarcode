@@ -41,31 +41,59 @@ jobs:
         shell: pwsh
         run: |
           $exe = (Resolve-Path "dist\Dastyar\Dastyar.exe").Path
-          Write-Host "exe size: $((Get-Item $exe).Length) bytes"
+          $size = (Get-Item $exe).Length
+          Write-Host "exe size: $size bytes"
+          Write-Host "::notice::exe built, $size bytes"
+
           $env:DASTYAR_DATA = Join-Path $env:RUNNER_TEMP "dd-smoke"
+          $log = Join-Path $env:RUNNER_TEMP "dastyar.log"
           $p = Start-Process -FilePath $exe `
-            -ArgumentList "serve","--port","8599","--no-browser" -PassThru
+            -ArgumentList "serve","--port","8599","--no-browser" `
+            -RedirectStandardOutput $log -RedirectStandardError "$log.err" -PassThru
+
           $ok = $false
+          $last = ""
           foreach ($i in 1..60) {
             Start-Sleep -Milliseconds 500
+            if ($p.HasExited) {
+              Write-Host "::error::the exe exited immediately with code $($p.ExitCode)"
+              break
+            }
             try {
               $r = Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:8599/api/health" -TimeoutSec 2
-              if ($r.StatusCode -eq 200) { Write-Host "health: $($r.Content)"; $ok = $true; break }
-            } catch { }
+              if ($r.StatusCode -eq 200) {
+                Write-Host "health: $($r.Content)"
+                Write-Host "::notice::health ok: $($r.Content)"
+                $ok = $true
+                break
+              }
+            } catch { $last = $_.Exception.Message }
           }
-          # the UI + bundled Persian font must be served too
-          if ($ok) {
+
+          if (-not $ok) {
+            Write-Host "::error::no answer on 8599 (last: $last)"
+            foreach ($f in @($log, "$log.err")) {
+              if (Test-Path $f) {
+                Get-Content $f -Tail 40 | ForEach-Object { Write-Host "log| $_" }
+                Get-Content $f -Tail 6 | ForEach-Object { Write-Host "::error::log| $_" }
+              }
+            }
+          } else {
             try {
-              $page = Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:8599/" -TimeoutSec 3
-              Write-Host "index bytes: $($page.RawContentLength)"
+              $page = Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:8599/" -TimeoutSec 5
               $font = Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:8599/fonts/vazirmatn-regular.woff2" -TimeoutSec 5
-              Write-Host "font bytes: $($font.RawContentLength)"
-              if ($font.RawContentLength -lt 1000) { $ok = $false }
-            } catch { $ok = $false }
+              Write-Host "index: $($page.RawContentLength) bytes, font: $($font.RawContentLength) bytes"
+              Write-Host "::notice::UI ok ($($page.RawContentLength) bytes), font ok ($($font.RawContentLength) bytes)"
+              if ($page.RawContentLength -lt 2000 -or $font.RawContentLength -lt 1000) { $ok = $false }
+            } catch {
+              Write-Host "::error::UI/font request failed: $($_.Exception.Message)"
+              $ok = $false
+            }
           }
+
           Start-Process -FilePath "taskkill" -ArgumentList "/F","/T","/PID",$p.Id -Wait -ErrorAction SilentlyContinue
           if (-not $ok) { throw "bundled server/UI did not answer on port 8599" }
-          Write-Host "OK: exe serves API + UI + fonts"
+          Write-Host "OK: exe serves API + UI + Persian font"
 
       - name: Add launcher + readme to the package
         shell: pwsh
@@ -89,10 +117,13 @@ jobs:
             -DestinationPath "Dastyar-win-x64.zip" -Force
 
       - uses: actions/upload-artifact@v5
+        if: always()
         with:
           name: Dastyar-win-x64
-          path: Dastyar-win-x64.zip
-          if-no-files-found: error
+          path: |
+            Dastyar-win-x64.zip
+            ${{ runner.temp }}/dastyar.log*
+          if-no-files-found: warn
 
       - name: Attach to release
         if: startsWith(github.ref, 'refs/tags/v')

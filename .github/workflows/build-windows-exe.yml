@@ -13,25 +13,17 @@ permissions:
 
 jobs:
   build:
-    name: exe on ${{ matrix.os }} / py${{ matrix.python }}
-    runs-on: ${{ matrix.os }}
+    # Windows Server 2022 image + Python 3.8: the produced binaries use only
+    # APIs present since Windows 7 SP1, so the same zip runs on 7/8/8.1/10/11.
+    name: exe (Windows 7 SP1 .. 11, x64)
+    runs-on: windows-2022
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: windows-2019          # real Windows Server 2019 (win 10 kernel)
-            python: "3.8"
-            label: win-10-11
-          - os: windows-2022
-            python: "3.8"
-            label: win-11
     steps:
       - uses: actions/checkout@v5
 
       - uses: actions/setup-python@v6
         with:
-          python-version: ${{ matrix.python }}
+          python-version: "3.8"
           architecture: x64
 
       - name: Install PyInstaller
@@ -94,17 +86,17 @@ jobs:
         shell: pwsh
         run: |
           Compress-Archive -Path dist\Dastyar\* `
-            -DestinationPath "Dastyar-${{ matrix.label }}-x64.zip" -Force
+            -DestinationPath "Dastyar-win-x64.zip" -Force
 
       - uses: actions/upload-artifact@v5
         with:
-          name: Dastyar-${{ matrix.label }}-x64
-          path: Dastyar-${{ matrix.label }}-x64.zip
+          name: Dastyar-win-x64
+          path: Dastyar-win-x64.zip
           if-no-files-found: error
 
       - name: Attach to release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: Dastyar-${{ matrix.label }}-x64.zip
+          files: Dastyar-win-x64.zip
           generate_release_notes: true

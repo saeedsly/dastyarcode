@@ -89,6 +89,104 @@ def enable_dpi_awareness() -> bool:
     return False
 
 
+def _declare_winapi():
+    """Give ctypes the *correct* 64-bit signatures.
+
+    Without an explicit restype, ctypes assumes C ``int`` (32 bits) and
+    silently truncates 64-bit values — a window handle returned by
+    CreateWindowExW becomes invalid, so DestroyWindow()/Shell_NotifyIconW()
+    fail and the tray icon stays behind.  Also keep *one* reference to the
+    WNDPROC callback; if Python garbage-collects it, Windows calls into freed
+    memory and CreateWindowExW fails.
+
+    Returns a dict of prepared functions/objects (empty off Windows).
+    """
+    if not IS_WINDOWS:
+        return {}
+    import ctypes
+    from ctypes import wintypes
+
+    user32 = ctypes.WinDLL("user32", use_last_error=True)
+    shell32 = ctypes.WinDLL("shell32", use_last_error=True)
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+
+    class WNDCLASS(ctypes.Structure):
+        _fields_ = [
+            ("style", wintypes.UINT),
+            ("lpfnWndProc", ctypes.c_void_p),
+            ("cbClsExtra", ctypes.c_int),
+            ("cbWndExtra", ctypes.c_int),
+            ("hInstance", wintypes.HINSTANCE),
+            ("hIcon", wintypes.HICON),
+            ("hCursor", wintypes.HANDLE),
+            ("hbrBackground", wintypes.HBRUSH),
+            ("lpszMenuName", wintypes.LPCWSTR),
+            ("lpszClassName", wintypes.LPCWSTR),
+        ]
+
+    class NOTIFYICONDATA(ctypes.Structure):
+        _fields_ = [
+            ("cbSize", wintypes.DWORD),
+            ("hWnd", wintypes.HWND),
+            ("uID", wintypes.UINT),
+            ("uFlags", wintypes.UINT),
+            ("uCallbackMessage", wintypes.UINT),
+            ("hIcon", wintypes.HICON),
+            ("szTip", wintypes.WCHAR * 128),
+        ]
+
+    LRESULT = ctypes.c_ssize_t
+    WNDPROC = ctypes.WINFUNCTYPE(LRESULT, wintypes.HWND, wintypes.UINT,
+                                 wintypes.WPARAM, wintypes.LPARAM)
+
+    user32.RegisterClassW.argtypes = [ctypes.POINTER(WNDCLASS)]
+    user32.RegisterClassW.restype = wintypes.ATOM
+    user32.CreateWindowExW.argtypes = [wintypes.DWORD, wintypes.LPCWSTR, wintypes.LPCWSTR,
+                                       wintypes.DWORD, ctypes.c_int, ctypes.c_int,
+                                       ctypes.c_int, ctypes.c_int, wintypes.HWND,
+                                       wintypes.HMENU, wintypes.HINSTANCE,
+                                       ctypes.c_void_p]
+    user32.CreateWindowExW.restype = wintypes.HWND
+    user32.DefWindowProcW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM,
+                                      wintypes.LPARAM]
+    user32.DefWindowProcW.restype = LRESULT
+    user32.DestroyWindow.argtypes = [wintypes.HWND]
+    user32.DestroyWindow.restype = wintypes.BOOL
+    user32.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM,
+                                    wintypes.LPARAM]
+    user32.PostMessageW.restype = wintypes.BOOL
+    user32.GetMessageW.argtypes = [ctypes.POINTER(wintypes.MSG), wintypes.HWND,
+                                   wintypes.UINT, wintypes.UINT]
+    user32.GetMessageW.restype = ctypes.c_int
+    user32.RegisterHotKey.argtypes = [wintypes.HWND, ctypes.c_int, wintypes.UINT,
+                                      wintypes.UINT]
+    user32.RegisterHotKey.restype = wintypes.BOOL
+    user32.UnregisterHotKey.argtypes = [wintypes.HWND, ctypes.c_int]
+    user32.UnregisterHotKey.restype = wintypes.BOOL
+    user32.LoadImageW.argtypes = [wintypes.HINSTANCE, wintypes.LPCWSTR, wintypes.UINT,
+                                  ctypes.c_int, ctypes.c_int, wintypes.UINT]
+    user32.LoadImageW.restype = wintypes.HANDLE
+    user32.LoadIconW.argtypes = [wintypes.HINSTANCE, ctypes.c_void_p]
+    user32.LoadIconW.restype = wintypes.HICON
+    shell32.Shell_NotifyIconW.argtypes = [wintypes.DWORD, ctypes.POINTER(NOTIFYICONDATA)]
+    shell32.Shell_NotifyIconW.restype = wintypes.BOOL
+    kernel32.GetModuleHandleW.argtypes = [wintypes.LPCWSTR]
+    kernel32.GetModuleHandleW.restype = wintypes.HMODULE
+
+    return {"user32": user32, "shell32": shell32, "kernel32": kernel32,
+            "WNDCLASS": WNDCLASS, "NOTIFYICONDATA": NOTIFYICONDATA,
+            "WNDPROC": WNDPROC, "LRESULT": LRESULT}
+
+
+_WINAPI_CACHE = {}
+
+
+def _winapi():
+    if not _WINAPI_CACHE and IS_WINDOWS:
+        _WINAPI_CACHE.update(_declare_winapi())
+    return _WINAPI_CACHE
+
+
 class WindowsHelper:
     def __init__(self, tooltip: str = "دستیار", icon_path: Optional[str] = None,
                  on_open: Optional[Callable[[], None]] = None,
@@ -108,6 +206,7 @@ class WindowsHelper:
         self._menu_ids: List[int] = []
         self._icon_added = False
         self._hotkey_ok = False
+        self._wndproc_cb = None        # keeps the ctypes callback alive
         self.error: Optional[str] = None
 
     # ------------------------------------------------------------------ #
@@ -134,7 +233,9 @@ class WindowsHelper:
         thread = self._thread
         if hwnd:
             try:
-                ctypes.windll.user32.PostMessageW(hwnd, WM_CLOSE, 0, 0)
+                api = _winapi()
+                if api:
+                    api["user32"].PostMessageW(hwnd, WM_CLOSE, 0, 0)
             except Exception:
                 pass
         if thread is not None and thread.is_alive():
@@ -154,32 +255,17 @@ class WindowsHelper:
             self._hwnd = None
 
     def _loop(self) -> None:
-        user32 = ctypes.windll.user32
-        shell32 = ctypes.windll.shell32
-        kernel32 = ctypes.windll.kernel32
-
-        WNDPROC = ctypes.WINFUNCTYPE(wintypes.LPARAM, wintypes.HWND, wintypes.UINT,
-                                     wintypes.WPARAM, wintypes.LPARAM)
-
-        class WNDCLASS(ctypes.Structure):
-            _fields_ = [
-                ("style", wintypes.UINT), ("lpfnWndProc", WNDPROC),
-                ("cbClsExtra", ctypes.c_int), ("cbWndExtra", ctypes.c_int),
-                ("hInstance", wintypes.HINSTANCE), ("hIcon", wintypes.HICON),
-                ("hCursor", wintypes.HANDLE), ("hbrBackground", wintypes.HBRUSH),
-                ("lpszMenuName", wintypes.LPCWSTR), ("lpszClassName", wintypes.LPCWSTR),
-            ]
-
-        class NOTIFYICONDATA(ctypes.Structure):
-            _fields_ = [
-                ("cbSize", wintypes.DWORD), ("hWnd", wintypes.HWND),
-                ("uID", wintypes.UINT), ("uFlags", wintypes.UINT),
-                ("uCallbackMessage", wintypes.UINT), ("hIcon", wintypes.HICON),
-                ("szTip", wintypes.WCHAR * 128), ("dwState", wintypes.DWORD),
-                ("dwStateMask", wintypes.DWORD), ("szInfo", wintypes.WCHAR * 256),
-                ("uVersion", wintypes.UINT), ("szInfoTitle", wintypes.WCHAR * 64),
-                ("dwInfoFlags", wintypes.DWORD),
-            ]
+        api = _winapi()
+        if not api:
+            self.error = "win32 api unavailable"
+            self._ready.set()
+            return
+        user32 = api["user32"]
+        shell32 = api["shell32"]
+        kernel32 = api["kernel32"]
+        WNDCLASS = api["WNDCLASS"]
+        NOTIFYICONDATA = api["NOTIFYICONDATA"]
+        WNDPROC = api["WNDPROC"]
 
         hinst = kernel32.GetModuleHandleW(None)
         class_name = "DastyarTrayWindow"
@@ -224,9 +310,10 @@ class WindowsHelper:
             return user32.DefWindowProcW(hwnd, msg, wparam, lparam)
 
         wndproc_cb = WNDPROC(wndproc)
+        self._wndproc_cb = wndproc_cb   # MUST outlive the window
         wc = WNDCLASS()
         wc.style = 0
-        wc.lpfnWndProc = wndproc_cb
+        wc.lpfnWndProc = ctypes.cast(wndproc_cb, ctypes.c_void_p)
         wc.hInstance = hinst
         wc.lpszClassName = class_name
         user32.RegisterClassW(ctypes.byref(wc))
@@ -234,7 +321,8 @@ class WindowsHelper:
         hwnd = user32.CreateWindowExW(0, class_name, self.tooltip, 0, 0, 0, 0, 0,
                                       None, None, hinst, None)
         if not hwnd:
-            self.error = "CreateWindowEx failed"
+            err = ctypes.get_last_error() if hasattr(ctypes, "get_last_error") else 0
+            self.error = "CreateWindowEx failed (win error %s)" % err
             self._ready.set()
             return
         self._hwnd = hwnd
@@ -247,10 +335,10 @@ class WindowsHelper:
             except Exception:
                 hicon = None
         if not hicon:
-            hicon = user32.LoadIconW(None, ctypes.c_wchar_p(32512))  # IDI_APPLICATION
+            hicon = user32.LoadIconW(None, ctypes.c_void_p(32512))  # IDI_APPLICATION
 
         nid = NOTIFYICONDATA()
-        nid.cbSize = ctypes.sizeof(NOTIFYICONDATA)
+        nid.cbSize = ctypes.sizeof(nid)
         nid.hWnd = hwnd
         nid.uID = 1
         nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP
@@ -276,9 +364,12 @@ class WindowsHelper:
         try:
             if not self._icon_added or not self._hwnd:
                 return
-            shell32 = ctypes.windll.shell32
-            nid = NOTIFYICONDATA()
-            nid.cbSize = ctypes.sizeof(NOTIFYICONDATA)
+            api = _winapi()
+            if not api:
+                return
+            shell32 = api["shell32"]
+            nid = api["NOTIFYICONDATA"]()
+            nid.cbSize = ctypes.sizeof(nid)
             nid.hWnd = self._hwnd
             nid.uID = 1
             shell32.Shell_NotifyIconW(NIM_DELETE, ctypes.byref(nid))
@@ -287,7 +378,12 @@ class WindowsHelper:
             pass
 
     def _show_menu(self, hwnd) -> None:
-        user32 = ctypes.windll.user32
+        api = _winapi()
+        if not api:
+            return
+        user32 = api["user32"]
+        user32.CreatePopupMenu.restype = wintypes.HMENU
+        user32.TrackPopupMenu.restype = ctypes.c_int
         menu = user32.CreatePopupMenu()
         user32.AppendMenuW(menu, MF_STRING, 1001, "باز کردن دستیار")
         user32.AppendMenuW(menu, MF_STRING, 1002, "خروج")
@@ -300,4 +396,4 @@ class WindowsHelper:
             threading.Thread(target=self.on_open, daemon=True).start()
         elif cmd == 1002:
             threading.Thread(target=self.on_quit, daemon=True).start()
-        user32.DestroyMenu(menu)
+        user32.DestroyMenu(ctypes.c_void_p(menu) if isinstance(menu, int) else menu)

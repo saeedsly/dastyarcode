@@ -1,4 +1,5 @@
 @echo off
+rem ASCII-only on purpose (cmd.exe on Windows 7 cannot render UTF-8 scripts)
 chcp 65001 >nul 2>&1
 setlocal EnableDelayedExpansion
 title Dastyar - build standalone exe
@@ -31,8 +32,8 @@ powershell -NoProfile -Command "if(Test-Path 'dist\Dastyar-win64.zip'){Remove-It
 
 echo.
 echo  ============================================
-echo   ✅  dist\Dastyar\Dastyar.exe
-echo   ✅  dist\Dastyar-win64.zip  (give this to friends)
+echo   [OK] dist\Dastyar\Dastyar.exe
+echo   [OK] dist\Dastyar-win64.zip   (share this with friends)
 echo  ============================================
 echo.
 pause

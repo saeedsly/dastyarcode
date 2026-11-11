@@ -1,7 +1,7 @@
 @echo off
 rem ===================================================================
-rem  دستیار / Dastyar — safe uninstall (keeps your chats & settings)
-rem  Remove with:  Uninstall.cmd  /purge   to also delete data
+rem  Dastyar (Dast-yar) - safe uninstall
+rem  Keeps your chats and settings unless you pass /purge
 rem ===================================================================
 chcp 65001 >nul 2>&1
 setlocal
@@ -12,21 +12,32 @@ set "PURGE="
 if /I "%~1"=="/purge" set "PURGE=1"
 
 echo.
-echo  حذف دستیار...
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$d=[Environment]::GetFolderPath('Desktop');" ^
-  "$p=$d+'\دستیار.lnk'; if(Test-Path $p){Remove-Item $p -Force};" ^
-  "$sm=[Environment]::GetFolderPath('Programs')+'\Dastyar';" ^
-  "if(Test-Path $sm){Remove-Item $sm -Recurse -Force}"
+echo  Removing Dastyar shortcuts...
+
+if exist "%APPDIR%\runtime\python.exe" (
+  "%APPDIR%\runtime\python.exe" -m dastyar.installer_ui uninstall %1
+) else (
+  powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+    "$d=[Environment]::GetFolderPath('Desktop');" ^
+    "$p=$d+'\Dastyar.lnk'; if(Test-Path $p){Remove-Item $p -Force};" ^
+    "$sm=[Environment]::GetFolderPath('Programs')+'\Dastyar';" ^
+    "if(Test-Path $sm){Remove-Item $sm -Recurse -Force}" 2>nul
+)
 
 if defined PURGE (
-  echo  داده‌ها و گفتگوهای ذخیره‌شده پاک می‌شوند: %DATA%
+  echo.
+  echo  Deleting saved chats, settings and the private Python...
   if exist "%DATA%" rd /s /q "%DATA%"
   if exist "%APPDIR%\runtime" rd /s /q "%APPDIR%\runtime"
 )
 
 echo.
-echo  ✅ حذف شد. اگر /purge ندادی، تنظیمات و گفتگوها در %DATA% مانده‌اند.
-echo  نکته: فایل‌های برنامه را دستی از همین پوشه پاک کن.
+if defined PURGE (
+  echo  Done. Everything was removed.
+) else (
+  echo  Done. Your chats and settings are still in %DATA%.
+  echo  Run "Uninstall.cmd /purge" to delete those as well.
+)
+echo  You can now delete the program folder itself.
 echo.
 pause

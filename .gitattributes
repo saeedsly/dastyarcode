@@ -1,0 +1,20 @@
+# Normalize line endings so the project behaves the same on every OS.
+* text=auto
+
+# Windows batch files MUST be CRLF: cmd.exe mis-parses LF-only files,
+# especially around labels (goto/call) and parenthesised blocks.
+*.cmd  text eol=crlf
+*.bat  text eol=crlf
+*.ps1  text eol=crlf
+
+# Shell scripts run on macOS/Linux/CI
+*.sh   text eol=lf
+*.py   text eol=lf
+
+# Binary assets: never touch
+*.ttf  binary
+*.woff2 binary
+*.ico  binary
+*.png  binary
+*.exe  binary
+*.zip  binary

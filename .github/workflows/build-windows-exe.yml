@@ -32,7 +32,7 @@ jobs:
           python -m pip install "pyinstaller==5.13.2"
 
       - name: Run tests first (never ship a broken exe)
-        run: python -m unittest discover -s tests -v
+        run: python scripts/ci_tests.py --verbose
 
       - name: Build
         run: pyinstaller --noconfirm --clean dastyar.spec

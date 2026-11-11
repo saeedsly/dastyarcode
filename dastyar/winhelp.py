@@ -62,6 +62,33 @@ def parse_hotkey(spec: str):
     return mods, vk
 
 
+def enable_dpi_awareness() -> bool:
+    """Make the app crisp on high-DPI screens (and not blurry on 4K laptops).
+
+    Uses the Vista/7 API when available and falls back gracefully: calling the
+    Per-Monitor-v2 shim on Windows 7 would crash, so every call is guarded.
+    """
+    if not IS_WINDOWS:
+        return False
+    try:
+        import ctypes
+
+        # PROCESS_PER_MONITOR_DPI_AWARE on Win8.1+, ignored on older systems
+        try:
+            ctypes.windll.shcore.SetProcessDpiAwareness(2)
+            return True
+        except Exception:
+            pass
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()   # Vista .. Win8
+            return True
+        except Exception:
+            pass
+    except Exception:
+        pass
+    return False
+
+
 class WindowsHelper:
     def __init__(self, tooltip: str = "دستیار", icon_path: Optional[str] = None,
                  on_open: Optional[Callable[[], None]] = None,
@@ -79,6 +106,8 @@ class WindowsHelper:
         self._hwnd = None
         self._ready = threading.Event()
         self._menu_ids: List[int] = []
+        self._icon_added = False
+        self._hotkey_ok = False
         self.error: Optional[str] = None
 
     # ------------------------------------------------------------------ #
@@ -163,13 +192,10 @@ class WindowsHelper:
                     return 0
                 if msg == WM_CLOSE:
                     try:
-                        nid = NOTIFYICONDATA()
-                        nid.cbSize = ctypes.sizeof(NOTIFYICONDATA)
-                        nid.hWnd = hwnd
-                        nid.uID = 1
-                        shell32.Shell_NotifyIconW(NIM_DELETE, ctypes.byref(nid))
+                        user32.UnregisterHotKey(hwnd, 1)
                     except Exception:
                         pass
+                    self_ref._remove_icon()
                     user32.DestroyWindow(hwnd)
                     user32.PostQuitMessage(0)
                     return 0
@@ -214,12 +240,12 @@ class WindowsHelper:
         nid.uCallbackMessage = WM_TRAYICON
         nid.hIcon = hicon
         nid.szTip = self.tooltip[:120]
-        shell32.Shell_NotifyIconW(NIM_ADD, ctypes.byref(nid))
+        self._icon_added = bool(shell32.Shell_NotifyIconW(NIM_ADD, ctypes.byref(nid)))
 
         # --- global hotkey --------------------------------------------
         if self.hotkey:
             mods, vk = parse_hotkey(self.hotkey)
-            user32.RegisterHotKey(hwnd, 1, mods, vk)
+            self._hotkey_ok = bool(user32.RegisterHotKey(hwnd, 1, mods, vk))
 
         self._ready.set()
 
@@ -228,6 +254,20 @@ class WindowsHelper:
         while user32.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
             user32.TranslateMessage(ctypes.byref(msg))
             user32.DispatchMessageW(ctypes.byref(msg))
+
+    def _remove_icon(self) -> None:
+        try:
+            if not self._icon_added or not self._hwnd:
+                return
+            shell32 = ctypes.windll.shell32
+            nid = NOTIFYICONDATA()
+            nid.cbSize = ctypes.sizeof(NOTIFYICONDATA)
+            nid.hWnd = self._hwnd
+            nid.uID = 1
+            shell32.Shell_NotifyIconW(NIM_DELETE, ctypes.byref(nid))
+            self._icon_added = False
+        except Exception:
+            pass
 
     def _show_menu(self, hwnd) -> None:
         user32 = ctypes.windll.user32

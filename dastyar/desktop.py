@@ -33,6 +33,21 @@ def _port_open(port: int, host: str = "127.0.0.1", timeout: float = 0.4) -> bool
         s.close()
 
 
+def _is_our_server(port: int) -> bool:
+    """True when something answers /api/health on that port (i.e. Dastyar)."""
+    if not _port_open(port):
+        return False
+    import json
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen("http://127.0.0.1:%d/api/health" % port, timeout=1.5) as r:
+            data = json.loads(r.read().decode("utf-8"))
+        return bool(data.get("ok")) and "version" in data
+    except Exception:
+        return False
+
+
 def _wait_for_server(port: int, seconds: float = 15) -> bool:
     deadline = time.time() + seconds
     while time.time() < deadline:
@@ -108,11 +123,25 @@ def _open_window(url: str) -> None:
 
 def launch(settings: Settings, port: Optional[int] = None, open_browser: bool = True,
            tray: bool = True) -> int:
+    if IS_WINDOWS:
+        try:
+            from .winhelp import enable_dpi_awareness
+
+            enable_dpi_awareness()
+        except Exception:
+            pass
     port = int(port or settings.get("ui.port") or 8577)
     url = "http://127.0.0.1:%d" % port
 
+    # Already running (double click twice, or the tray app is minimised):
+    # just bring the existing window back instead of failing on a busy port.
+    if _is_our_server(port):
+        print("  دستیار از قبل باز است — پنجره را می‌آورم: %s" % url)
+        _open_window(url)
+        return 0
+
     server_thread = threading.Thread(
-        target=lambda: serve(settings, port=port, open_browser=False, quiet=False),
+        target=lambda: serve(settings, port=port, open_browser=False, quiet=True),
         name="dastyar-server",
         daemon=True,
     )
@@ -151,7 +180,7 @@ def launch(settings: Settings, port: Optional[int] = None, open_browser: bool = 
             helper = None
 
     if open_browser:
-        open_ui()
+        threading.Thread(target=open_ui, name="dastyar-window", daemon=True).start()
 
     print("\n  ✅ دستیار آماده است — %s" % url)
     if helper and helper._hwnd:

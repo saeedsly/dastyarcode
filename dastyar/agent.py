@@ -27,6 +27,12 @@ from .tools.memory import memory_prompt
 from .tools.vision import image_to_data_url
 
 
+# How long a yes/no question waits before it is treated as "no".  A person is
+# usually sitting in front of the window, so a couple of minutes is plenty;
+# the old 10-minute block felt like a frozen app.
+CONFIRM_TIMEOUT = 120.0
+
+
 class Confirmation:
     """A blocking yes/no request shown in the UI."""
 
@@ -82,9 +88,24 @@ class Agent:
         self.pending[conf.id] = conf
         self._current_confirmation = conf
         self._emit({"type": "confirm_request", "id": conf.id, **payload})
-        ok = conf.wait(timeout=600)
+
+        # Wait in short slices so a cancel() (or a closed tab) is noticed
+        # immediately instead of blocking the whole turn for minutes.
+        ok = False
+        waited = 0.0
+        while waited < CONFIRM_TIMEOUT:
+            if self.cancelled.is_set():
+                break
+            if conf.event.wait(0.25):
+                ok = bool(conf.approved)
+                break
+            waited += 0.25
+
         self.pending.pop(conf.id, None)
         self._current_confirmation = None
+        if not ok:
+            self._emit({"type": "warning",
+                        "message": "اجازه داده نشد؛ عملیات انجام نشد."})
         self._emit({"type": "confirm_resolved", "id": conf.id, "approved": ok})
         return ok
 

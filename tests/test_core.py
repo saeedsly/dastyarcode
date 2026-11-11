@@ -463,3 +463,55 @@ class TestFrozenBuildSafety(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+class TestConfirmationFlow(TempHome):
+    """A dangerous tool must not freeze the turn for minutes."""
+
+    def test_cancel_unblocks_a_pending_confirmation(self):
+        import threading
+        import time as _time
+
+        from dastyar.agent import Agent
+
+        self.settings.update({"policy": "ask", "allow_all_paths": True})
+        agent = Agent(self.settings)
+        seen = {}
+
+        def cancel_soon():
+            for _ in range(60):
+                _time.sleep(0.1)
+                if agent.pending:
+                    seen["yes"] = True
+                    break
+            _time.sleep(0.2)
+            agent.cancel()
+
+        threading.Thread(target=cancel_soon, daemon=True).start()
+        started = _time.time()
+        kinds = [e["type"] for e in agent.run("یک فایل PDF درباره هوش مصنوعی بساز")]
+        elapsed = _time.time() - started
+
+        self.assertIn("confirm_request", kinds)
+        self.assertIn("stopped", kinds)
+        self.assertLess(elapsed, 10, "the turn should abort immediately on cancel")
+
+    def test_confirm_timeout_treats_silence_as_no(self):
+        from dastyar import agent as agent_mod
+
+        original = agent_mod.CONFIRM_TIMEOUT
+        agent_mod.CONFIRM_TIMEOUT = 0.3
+        try:
+            from dastyar.agent import Agent
+
+            self.settings.update({"policy": "ask", "allow_all_paths": True})
+            agent = Agent(self.settings)
+            events = list(agent.run("یک فایل PDF درباره هوش مصنوعی بساز"))
+            kinds = [e["type"] for e in events]
+            self.assertIn("confirm_request", kinds)
+            self.assertIn("confirm_resolved", kinds)
+            resolved = [e for e in events if e["type"] == "confirm_resolved"][-1]
+            self.assertFalse(resolved["approved"])
+            # the tool must not have run
+            self.assertNotIn("tool_end", kinds)
+        finally:
+            agent_mod.CONFIRM_TIMEOUT = original

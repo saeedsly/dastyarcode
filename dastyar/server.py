@@ -87,6 +87,14 @@ class App:
         with self.lock:
             if q in self.subscribers:
                 self.subscribers.remove(q)
+            nobody_watching = not self.subscribers
+        if nobody_watching:
+            # The tab/browser is gone: a question that is still waiting for a
+            # click would otherwise block the turn (and a retry) for minutes.
+            try:
+                self.agent.cancel()
+            except Exception:
+                pass
 
     @property
     def last_activity(self) -> float:

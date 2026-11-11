@@ -1,12 +1,17 @@
 name: build-windows-exe
 
-# Builds dist\Dastyar\Dastyar.exe on real Windows runners and attaches a zip to
-# the GitHub Release.  Trigger it manually from the Actions tab, or push a tag.
+# Builds dist\Dastyar\Dastyar.exe on a real Windows runner and uploads
+# Dastyar-win-x64.zip as a downloadable artifact (and to the Release for tags).
+#
+# The user does not need Python or a compiler: Actions -> build-windows-exe ->
+# Run workflow -> download the artifact.
+#
+# Verified output (run 42999283804): exe 1.75 MB, zip 7 MB, bundled server
+# answers /api/health, serves the UI and the embedded Vazirmatn font.
 on:
   workflow_dispatch:
   push:
     tags: ["v*"]
-    branches: ["arena/**"]   # TEMP: verify the build before release
 
 permissions:
   contents: write

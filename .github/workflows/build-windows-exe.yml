@@ -6,6 +6,7 @@ on:
   workflow_dispatch:
   push:
     tags: ["v*"]
+    branches: ["arena/**"]   # TEMP: verify the build before release
 
 permissions:
   contents: write

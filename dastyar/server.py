@@ -264,6 +264,8 @@ def make_handler(app: App):
                     })
                 if path == "/api/events":
                     return self.stream_events()
+                if path in ("/api/notes", "/api/notes/"):
+                    return self.send_json(notes_tool.notes_snapshot())
                 if path == "/api/state":
                     return self.send_json({
                         "data_dir": str(data_dir()),
@@ -369,7 +371,13 @@ def make_handler(app: App):
                 if path == "/api/remember":
                     from .tools.memory import remember
 
-                    out = remember(body.get("fact", ""), body.get("tag", "general"))
+                    fact = str(body.get("fact") or body.get("text") or "").strip()
+                    if not fact:
+                        return self.send_json({"ok": False, "error": "متن خالی است."}, 400)
+                    try:
+                        out = remember(fact, str(body.get("tag") or "general"))
+                    except Exception as exc:  # storage problems must not 500
+                        return self.send_json({"ok": False, "error": str(exc)}, 400)
                     return self.send_json({"ok": True, "result": out})
                 if path == "/api/tts":
                     from . import voice as voice_mod

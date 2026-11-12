@@ -364,6 +364,19 @@ def find_python() -> str:
     return sys.executable or "python"
 
 
+def _ignore_sigpipe() -> None:
+    """`dastyar tools | head` closes the pipe early — that is not an error."""
+    try:
+        import signal
+
+        if hasattr(signal, "SIGPIPE"):
+            # SIG_IGN => the write fails with EPIPE, Python raises
+            # BrokenPipeError and cli.main() exits cleanly (rc 0).
+            signal.signal(signal.SIGPIPE, signal.SIG_IGN)
+    except Exception:
+        pass
+
+
 def enable_console_safety() -> None:
     """A windowed (console=False) exe has sys.stdout/stderr == None.
 
@@ -420,6 +433,9 @@ def enable_console_safety() -> None:
             stream.reconfigure(encoding="utf-8", errors="replace")
         except Exception:
             pass
+
+    if not IS_WINDOWS:
+        _ignore_sigpipe()
 
     if IS_WINDOWS:
         try:  # make cmd.exe render the Persian output correctly

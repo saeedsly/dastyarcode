@@ -175,6 +175,24 @@ def cmd_key(args: argparse.Namespace) -> int:
     return 0
 
 
+def _swallow_broken_pipe() -> None:
+    """Silence a closed stdout (``| head``) at the file-descriptor level."""
+    import io
+
+    try:
+        devnull = os.open(os.devnull, os.O_WRONLY)
+        os.dup2(devnull, 1)
+        os.dup2(devnull, 2)
+        os.close(devnull)
+    except Exception:
+        pass
+    sink = io.StringIO()
+    sys.stdout = sink
+    sys.stderr = sink
+    sys.__stdout__ = sink
+    sys.__stderr__ = sink
+
+
 def cmd_tools(args: argparse.Namespace) -> int:
     from .tools import ToolRegistry
 
@@ -184,7 +202,13 @@ def cmd_tools(args: argparse.Namespace) -> int:
     by_cat: dict = {}
     for t in items:
         by_cat.setdefault(t["category"], []).append(t)
-    print("🧰 %d ابزار در %d دسته:\n" % (len(items), len(by_cat)))
+    out = sys.stdout
+    try:
+        print("🧰 %d ابزار در %d دسته:\n" % (len(items), len(by_cat)))
+        out.flush()
+    except BrokenPipeError:
+        _swallow_broken_pipe()
+        return 0
     for cat, tools in sorted(by_cat.items()):
         print("■ %s" % cat)
         for t in tools:
@@ -338,12 +362,7 @@ def main(argv: list = None) -> int:
         print("\nلغو شد.")
         return 130
     except BrokenPipeError:
-        # `dastyar tools | head` closes the pipe early — that is not an error
-        try:
-            devnull = os.open(os.devnull, os.O_WRONLY)
-            os.dup2(devnull, sys.stdout.fileno())
-        except Exception:
-            pass
+        _swallow_broken_pipe()
         return 0
 
 

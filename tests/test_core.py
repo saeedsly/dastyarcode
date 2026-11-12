@@ -515,3 +515,83 @@ class TestConfirmationFlow(TempHome):
             self.assertNotIn("tool_end", kinds)
         finally:
             agent_mod.CONFIRM_TIMEOUT = original
+
+
+class TestPdfGlyphAccounting(unittest.TestCase):
+    """Regression: relative Td advances used to push text off the page.
+
+    Td is relative to the last line start, so advancing by each glyph's width
+    accumulated the previous glyph's width as error; long Persian lines lost
+    their trailing characters.  Every character must now be emitted exactly
+    once, at an absolute position.
+    """
+
+    def _content_stream(self, pdf: bytes) -> bytes:
+        import zlib
+
+        markers = []
+        start = 0
+        while True:
+            i = pdf.find(b"stream", start)
+            if i < 0:
+                break
+            begin = i + len(b"stream")
+            if pdf[begin:begin + 2] == b"\r\n":
+                begin += 2
+            elif pdf[begin:begin + 1] in (b"\n", b"\r"):
+                begin += 1
+            end = pdf.find(b"endstream", begin)
+            if end < 0:
+                break
+            raw = pdf[begin:end].rstrip(b"\r\n")
+            try:
+                data = zlib.decompress(raw)
+            except Exception:
+                data = b""
+            if data.startswith(b"BT"):
+                markers.append(data)
+            start = end + len(b"endstream")
+        self.assertTrue(markers, "no content stream found")
+        return markers[0]
+
+    def test_every_character_is_drawn_once(self):
+        import re
+
+        from dastyar.tools.pdfkit import build_pdf
+
+        line = ("هوش مصنوعی شاخه‌ای از علوم رایانه است که سیستم‌ها را قادر می‌سازد "
+                "یاد بگیرند و تصمیم بگیرند، با اعداد ۱۲۳ و ۵۰,۰۰۰ تومان.")
+        pdf = build_pdf([line], "")
+        ops = self._content_stream(pdf).decode("latin-1")
+
+        shown = len(re.findall(r"<[0-9A-F]{4}> Tj", ops))
+        # Spaces are not drawn (they only advance the pen) and glyphs without
+        # a width may be skipped, but nothing else may disappear.
+        self.assertGreaterEqual(shown, len(line.replace(" ", "")) - 2,
+                                "glyphs were dropped while rendering")
+        self.assertLessEqual(shown, len(line) + 2, "glyphs were drawn twice")
+
+    def test_glyphs_are_positioned_absolutely(self):
+        import re
+
+        from dastyar.tools.pdfkit import build_pdf
+
+        pdf = build_pdf(["سلام دنیا"], "")
+        ops = self._content_stream(pdf).decode("latin-1")
+        texts = re.findall(r"1 0 0 1 ([\d.]+) ([\d.]+) Tm", ops)
+        self.assertGreaterEqual(len(texts), 8, "every glyph needs its own Tm")
+        # all glyphs of one line share the same baseline
+        baselines = {round(float(y), 2) for _, y in texts}
+        self.assertEqual(len(baselines), 1, "glyphs drifted off the baseline")
+
+    def test_line_stays_inside_the_page(self):
+        import re
+
+        from dastyar.tools.pdfkit import PAGE_W, build_pdf
+
+        pdf = build_pdf(["این خط باید کاملاً داخل صفحه بماند و از لبه بیرون نزند"] * 3, "")
+        ops = self._content_stream(pdf).decode("latin-1")
+        xs = [float(x) for x, _ in re.findall(r"1 0 0 1 ([\d.]+) ([\d.]+) Tm", ops)]
+        self.assertTrue(xs)
+        self.assertGreaterEqual(min(xs), 0, "text ran off the left edge")
+        self.assertLessEqual(max(xs), PAGE_W, "text ran off the right edge")

@@ -494,8 +494,14 @@ class PdfBuilder:
             esc = safe.replace("\\", r"\\").replace("(", r"\(").replace(")", r"\)")
             return ("BT /F1 %.1f Tf 1 0 0 1 %.1f %.1f Tm (%s) Tj ET\n"
                     % (size, x, y, esc)).encode("latin-1")
-        out = ["BT", "/F1 %.2f Tf" % size, "1 0 0 1 %.2f %.2f Tm" % (x, y)]
+        # IMPORTANT: Td is *relative to the last line start*, not to the glyph
+        # we just drew.  Advancing by the glyph width after each Tj therefore
+        # accumulates the previous glyph's width as error, pushes the line off
+        # the page and silently drops the trailing characters.  Position every
+        # glyph absolutely instead.
+        out = ["BT", "/F1 %.2f Tf" % size]
         upem = float(self.font.units_per_em)
+        cursor = 0.0
         for ch in text:
             gid = self.font.gid(ch)
             if not gid or gid >= len(self.font.advances):
@@ -503,9 +509,9 @@ class PdfBuilder:
                 if not gid:
                     continue
             width = self.font.advances[gid] * size / upem
+            out.append("1 0 0 1 %.2f %.2f Tm" % (x + cursor, y))
             out.append("<%04X> Tj" % gid)
-            if width > 0:
-                out.append("%.2f 0 Td" % width)
+            cursor += width
         out.append("ET")
         return ("\n".join(out) + "\n").encode("latin-1")
 

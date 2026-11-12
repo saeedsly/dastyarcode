@@ -61,6 +61,9 @@ class App:
         self.lock = threading.Lock()
         self._busy = False
         self.agent = Agent(settings, emit=None)  # events flow through /api/chat
+        # If nobody is watching (plain `serve`, API clients, ssh) the agent must
+        # not wait for a click that can never come.
+        self.agent.headless = True
         self.agent_lock = threading.Lock()
         self.started = time.time()
         self._last_activity = time.time()
@@ -68,6 +71,8 @@ class App:
     # -- event bus ----------------------------------------------------
     def publish(self, event: Dict[str, Any]) -> None:
         event.setdefault("ts", time.time())
+        if self.subscribers:
+            self.agent.headless = False
         with self.lock:
             subs = list(self.subscribers)
         for q in subs:
@@ -88,6 +93,7 @@ class App:
             if q in self.subscribers:
                 self.subscribers.remove(q)
             nobody_watching = not self.subscribers
+            self.agent.headless = nobody_watching
         if nobody_watching:
             # The tab/browser is gone: a question that is still waiting for a
             # click would otherwise block the turn (and a retry) for minutes.

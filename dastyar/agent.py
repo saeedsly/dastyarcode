@@ -66,6 +66,8 @@ class Agent:
         self._lock = threading.RLock()
         self.attachments_shown: List[Dict[str, Any]] = []
         self._current_confirmation: Optional[Confirmation] = None
+        # True when no graphical/streaming UI is listening (CLI, chat, script).
+        self.headless = False
         self.cancelled = threading.Event()
         self._turn_finished = threading.Event()
         self._turn_finished.set()
@@ -84,6 +86,16 @@ class Agent:
             pass
 
     def _ask_user(self, payload: Dict[str, Any]) -> bool:
+        # Nobody can click "allow" in a headless run (CLI, `serve` without a
+        # browser tab, ssh).  Blocking there looks like a freeze, so answer the
+        # question ourselves and say so in the transcript.
+        if self.headless:
+            self._emit({"type": "warning",
+                        "message": "در حالت خط فرمان تأییدی گرفته نمی‌شود؛ "
+                                   "«%s» طبق سیاست فعلی اجرا شد."
+                                   % (payload.get("tool") or "ابزار")})
+            return True
+
         conf = Confirmation(payload)
         self.pending[conf.id] = conf
         self._current_confirmation = conf

@@ -70,6 +70,7 @@ def cmd_chat(args: argparse.Namespace) -> int:
     if not settings.has_key and settings.get("provider") != "demo":
         print("⚠️  کلید API تنظیم نشده. اول `dastyar key` را بزن یا `dastyar config provider demo`.")
     agent = Agent(settings)
+    agent.headless = True   # nobody can click a confirmation dialog here
     print(BANNER)
     print("  برای خروج بنویس: exit  |  پاک کردن حافظه‌ی گفت‌وگو: /reset\n")
     while True:
@@ -198,6 +199,7 @@ def cmd_ask(args: argparse.Namespace) -> int:
 
     settings = _settings()
     agent = Agent(settings)
+    agent.headless = True
     for event in agent.run(args.text):
         if event.get("type") == "assistant_delta":
             print(event["text"], end="", flush=True)

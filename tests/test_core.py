@@ -595,3 +595,44 @@ class TestPdfGlyphAccounting(unittest.TestCase):
         self.assertTrue(xs)
         self.assertGreaterEqual(min(xs), 0, "text ran off the left edge")
         self.assertLessEqual(max(xs), PAGE_W, "text ran off the right edge")
+
+
+class TestHeadlessPermissions(TempHome):
+    """A CLI/daemon run must never wait for a dialog nobody can click."""
+
+    def test_headless_agent_runs_dangerous_tool_without_asking(self):
+        from dastyar.agent import Agent
+
+        self.settings.update({"policy": "ask", "allow_all_paths": True})
+        agent = Agent(self.settings)
+        agent.headless = True
+
+        out = self.home / "x.pdf"
+        events = list(agent.run("یک فایل PDF بساز"))
+        kinds = [e["type"] for e in events]
+        self.assertNotIn("confirm_request", kinds, "headless run asked for a click")
+        self.assertIn("tool_end", kinds)
+        self.assertIn("warning", kinds, "the user should be told no prompt was shown")
+
+    def test_interactive_agent_still_asks(self):
+        import threading
+        import time as _time
+
+        from dastyar.agent import Agent
+
+        self.settings.update({"policy": "ask", "allow_all_paths": True})
+        agent = Agent(self.settings)
+        agent.headless = False
+        kinds = []
+
+        def cancel_soon():
+            for _ in range(50):
+                _time.sleep(0.1)
+                if agent.pending:
+                    break
+            agent.cancel()
+
+        threading.Thread(target=cancel_soon, daemon=True).start()
+        for event in agent.run("یک فایل PDF بساز"):
+            kinds.append(event["type"])
+        self.assertIn("confirm_request", kinds)

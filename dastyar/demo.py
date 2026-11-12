@@ -70,6 +70,22 @@ def demo_reply(messages: List[Dict[str, Any]], tools: Optional[List[Any]]) -> Di
     if not text:
         return {"role": "assistant", "content": HELP, "tool_calls": []}
 
+    if re.fullmatch(r"(سلام|درود|سلام علیکم|hi|hello|hey)[!.، ]*", text.strip(), re.I):
+        name = ""
+        for m in messages:
+            if m.get("role") == "system" and "اسم" in (m.get("content") or ""):
+                name = " " + (m.get("content") or "").split("اسم")[-1].strip(" :،.")[:20]
+                break
+        return {
+            "role": "assistant",
+            "content": ("سلام%s! 👋 من دستیار تو هستم، روی همین کامپیوتر.\n\n"
+                        "الان در **حالت نمایشی** هستم (بدون کلید API) ولی همین حالا "
+                        "می‌توانم فایل PDF، پاورپوینت، اکسل و ورد بسازم، ساعت و تاریخ "
+                        "بگویم، فایل‌های دسکتاپ را نشان بدهم و یادداشت بسازم.\n\n"
+                        "چه کاری برایت انجام بدهم؟" % name),
+            "tool_calls": [],
+        }
+
     if any(k in text for k in ("کمک", "help", "چیکار", "چه کار")):
         return {"role": "assistant", "content": HELP, "tool_calls": []}
 

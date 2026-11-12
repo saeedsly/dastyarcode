@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#070b16">
+<title>دستیار — Dastyar</title>
+<link rel="stylesheet" href="/styles.css">
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
+</head>
+<body>
+<div class="aurora" aria-hidden="true"><span></span><span></span><span></span></div>
+
+<div class="app" id="app">
+  <!-- ---------------- sidebar ---------------- -->
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="logo">
+        <svg viewBox="0 0 48 48" width="30" height="30" aria-hidden="true">
+          <defs>
+            <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#6ea8ff"/><stop offset=".5" stop-color="#a78bfa"/><stop offset="1" stop-color="#22d3ee"/>
+            </linearGradient>
+          </defs>
+          <rect x="3" y="3" width="42" height="42" rx="13" fill="url(#g1)" opacity=".16"/>
+          <rect x="3" y="3" width="42" height="42" rx="13" fill="none" stroke="url(#g1)" stroke-width="2"/>
+          <circle cx="24" cy="24" r="6.5" fill="url(#g1)"/>
+          <path d="M24 8v5M24 35v5M8 24h5M35 24h5" stroke="url(#g1)" stroke-width="2.4" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <strong>دستیار</strong>
+        <small id="versionText">Dastyar</small>
+      </div>
+      <button class="icon-btn only-mobile" id="closeSidebar" title="بستن">✕</button>
+    </div>
+
+    <nav class="nav">
+      <button class="nav-item active" data-view="chat"><span>💬</span> گفت‌وگو</button>
+      <button class="nav-item" data-view="notes"><span>📝</span> یادداشت‌ها</button>
+      <button class="nav-item" data-view="tools"><span>🧰</span> ابزارها</button>
+      <button class="nav-item" data-view="skills"><span>⚡</span> مهارت‌ها</button>
+      <button class="nav-item" data-view="memory"><span>🧠</span> حافظه</button>
+      <button class="nav-item" data-view="settings"><span>⚙️</span> تنظیمات</button>
+    </nav>
+
+    <div class="sidebar-foot">
+      <div class="status" id="statusPill"><i class="dot"></i><span>در حال اتصال…</span></div>
+      <button class="ghost-btn" id="newChatBtn">＋ گفت‌وگوی جدید</button>
+      <div class="tiny" id="osLabel" title="سیستم‌عامل"></div>
+    </div>
+  </aside>
+
+  <!-- ---------------- main ---------------- -->
+  <main class="main">
+    <header class="topbar">
+      <button class="icon-btn only-mobile" id="openSidebar" title="منو">☰</button>
+      <div class="topbar-title" id="viewTitle">گفت‌وگو</div>
+      <div class="model-chip" id="modelChip" title="مدل فعال">
+        <span class="dot"></span><span id="modelName">—</span>
+      </div>
+      <div class="spacer"></div>
+      <button class="icon-btn" id="themeBtn" title="تغییر تم">🌙</button>
+      <button class="icon-btn" id="voiceBtn" title="گفتن (میکروفون)">🎙️</button>
+    </header>
+
+    <!-- ============ chat view ============ -->
+    <section class="view active" id="view-chat">
+      <div class="chat-scroll" id="chatScroll">
+        <div class="welcome" id="welcome">
+          <div class="hero">
+            <div class="hero-badge">دستیار همه‌کاره روی کامپیوتر خودت</div>
+            <h1>سلام <span id="helloName"></span> 👋<br>امروز چه کاری برایت انجام بدهم؟</h1>
+            <p>می‌توانم فایل‌ها را مدیریت کنم، برنامه باز کنم، در اینترنت جست‌وجو کنم، پاورپوینت و اکسل بسازم، عکس بگیرم و ببینم، تایپ کنم و همه‌چیز را برایت انجام دهم.</p>
+          </div>
+          <div class="suggest" id="suggestGrid">
+            <button class="card-suggest" data-prompt="یک فایل اکسل از هزینه‌های ماهانه‌ام بساز با ستون‌های تاریخ، عنوان، مبلغ">
+              <span class="ico">📊</span><b>اکسل بساز</b><small>جدول و گزارش با فرمول</small>
+            </button>
+            <button class="card-suggest" data-prompt="یک پاورپوینت ۷ اسلایدی درباره هوش مصنوعی برای ارائه دانشگاه بساز">
+              <span class="ico">📽️</span><b>پاورپوینت</b><small>ارائه حرفه‌ای</small>
+            </button>
+            <button class="card-suggest" data-prompt="تو دسکتاپ چه فایل‌هایی هست؟ مرتبشان کن">
+              <span class="ico">📁</span><b>دسکتاپ</b><small>مرتب‌سازی فایل‌ها</small>
+            </button>
+            <button class="card-suggest" data-prompt="آخرین اخبار تکنولوژی امروز را جست‌وجو کن و خلاصه بگو">
+              <span class="ico">🌐</span><b>خبر تازه</b><small>جست‌وجوی وب</small>
+            </button>
+            <button class="card-suggest" data-prompt="یک یادداشت به نام برنامه هفته بساز با کارهای مهم">
+              <span class="ico">📝</span><b>یادداشت</b><small>کارها و ایده‌ها</small>
+            </button>
+            <button class="card-suggest" data-prompt="سیستم را بررسی کن، چرا کند شده؟">
+              <span class="ico">🩺</span><b>سلامت سیستم</b><small>سرعت و حافظه</small>
+            </button>
+          </div>
+          <div class="quick-tips" id="quickTips"></div>
+        </div>
+        <div class="messages" id="messages"></div>
+      </div>
+
+      <div class="composer-wrap">
+        <div class="attach-preview" id="attachPreview"></div>
+        <div class="composer" id="composer">
+          <button class="icon-btn round" id="attachBtn" title="پیوست تصویر/اسکرین‌شات">📎</button>
+          <textarea id="input" rows="1" placeholder="هر کاری داری بگو… (Enter بفرست، Shift+Enter خط جدید)"></textarea>
+          <button class="icon-btn round mic" id="micBtn" title="ضبط صدا">🎤</button>
+          <button class="send-btn" id="sendBtn" title="ارسال">
+            <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M3.4 20.4 22 12 3.4 3.6 3.4 10l12 2-12 2z"/></svg>
+          </button>
+        </div>
+        <div class="composer-foot">
+          <span id="hintText">مدل: —</span>
+          <span class="spacer"></span>
+          <button class="link-btn" id="stopBtn" hidden>■ توقف</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ notes view ============ -->
+    <section class="view" id="view-notes">
+      <div class="panel-grid">
+        <div class="box">
+          <h3>📝 یادداشت تازه</h3>
+          <input id="noteTitle" class="input" placeholder="عنوان">
+          <textarea id="noteText" class="input" rows="5" placeholder="متن یادداشت…"></textarea>
+          <button class="primary-btn" id="saveNote">ذخیره</button>
+        </div>
+        <div class="box">
+          <h3>✅ کارِ تازه</h3>
+          <input id="todoText" class="input" placeholder="مثلاً: پرداخت قبض">
+          <button class="primary-btn" id="addTodo">افزودن</button>
+          <div class="list" id="todoList"></div>
+        </div>
+        <div class="box wide">
+          <h3>🗒️ یادداشت‌ها</h3>
+          <div class="list" id="notesList"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ tools view ============ -->
+    <section class="view" id="view-tools">
+      <div class="box">
+        <div class="box-head">
+          <h3>🧰 جعبه‌ابزار دستیار</h3>
+          <input id="toolSearch" class="input small" placeholder="جست‌وجوی ابزار…">
+        </div>
+        <div class="tool-grid" id="toolGrid"></div>
+      </div>
+    </section>
+
+    <!-- ============ skills view ============ -->
+    <section class="view" id="view-skills">
+      <div class="box">
+        <h3>⚡ مهارت‌های فعال</h3>
+        <p class="muted">وقتی موضوع پیام به این مهارت‌ها بخورد، دستورالعمل حرفه‌ای آن‌ها خودکار به دستیار داده می‌شود. می‌توانی مهارت خودت را در پوشه <code id="skillsPath"></code> به‌صورت فایل <code>.md</code> اضافه کنی.</p>
+        <div class="list" id="skillsList"></div>
+      </div>
+    </section>
+
+    <!-- ============ memory view ============ -->
+    <section class="view" id="view-memory">
+      <div class="panel-grid">
+        <div class="box">
+          <h3>🧠 چیزی را یادم بده</h3>
+          <input id="memFact" class="input" placeholder="مثلاً: اسم من سعید است و در گدنیا زندگی می‌کنم">
+          <button class="primary-btn" id="addMemory">ذخیره</button>
+        </div>
+        <div class="box wide">
+          <h3>حافظه‌ی بلندمدت</h3>
+          <div class="list" id="memoryList"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ settings view ============ -->
+    <section class="view" id="view-settings">
+      <div class="settings-grid">
+        <div class="setup-banner" id="setupBanner" hidden>
+          <b>👋 خوش آمدی!</b>
+          الان در <b>حالت نمایشی</b> هستی (بدون کلید و بدون اینترنت) تا فقط برنامه را ببینی.
+          برای اینکه دستیار واقعاً همه‌کاره شود، یکی از گزینه‌های زیر را انتخاب کن —
+          <b>OpenRouter، Gemini و Groq رایگان شروع می‌شوند</b>.
+          <div class="preset-row">
+            <button class="preset" data-provider="openrouter" data-model="google/gemini-2.5-flash">OpenRouter <small>رایگان</small></button>
+            <button class="preset" data-provider="gemini" data-model="gemini-2.5-flash">Google Gemini <small>رایگان</small></button>
+            <button class="preset" data-provider="groq" data-model="llama-3.3-70b-versatile">Groq <small>رایگان و سریع</small></button>
+            <button class="preset" data-provider="ollama" data-model="qwen3:8b">Ollama <small>آفلاین</small></button>
+            <button class="preset" data-provider="openai" data-model="gpt-4o-mini">OpenAI</button>
+          </div>
+        </div>
+
+        <div class="box">
+          <h3>🔑 اتصال به هوش مصنوعی</h3>
+          <label class="field">
+            <span>ارائه‌دهنده</span>
+            <select id="provider"></select>
+          </label>
+          <label class="field">
+            <span>مدل</span>
+            <input id="model" class="input" list="modelList" placeholder="gpt-4o-mini">
+            <datalist id="modelList"></datalist>
+          </label>
+          <label class="field">
+            <span>کلید API</span>
+            <input id="apiKey" class="input" type="password" placeholder="sk-…">
+            <small id="keyHelp" class="muted"></small>
+          </label>
+          <label class="field">
+            <span>آدرس سرور (base URL)</span>
+            <input id="baseUrl" class="input" placeholder="https://api.openai.com/v1">
+          </label>
+          <div class="row">
+            <button class="primary-btn" id="saveSettings">ذخیره</button>
+            <button class="ghost-btn" id="testConn">تست اتصال</button>
+            <span class="muted" id="testResult"></span>
+          </div>
+        </div>
+
+        <div class="box">
+          <h3>🛡️ دسترسی‌ها و رفتار</h3>
+          <label class="field">
+            <span>سیاست ابزارها</span>
+            <select id="policy">
+              <option value="ask">بپرس (امن — پیشنهادی)</option>
+              <option value="auto">خودکار (سریع، بدون سؤال)</option>
+              <option value="readonly">فقط خواندنی</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>مسیرهای مجاز (با کاما جدا کن)</span>
+            <input id="allowedPaths" class="input" placeholder="~/Desktop, ~/Documents">
+          </label>
+          <label class="check"><input type="checkbox" id="allowAllPaths"> دسترسی آزاد به همه‌ی فایل‌های سیستم</label>
+          <label class="field">
+            <span>نام تو (برای صدا زدن)</span>
+            <input id="userName" class="input" placeholder="سعید">
+          </label>
+          <label class="field">
+            <span>حداکثر مرحله در هر سؤال</span>
+            <input id="maxSteps" class="input" type="number" min="4" max="60">
+          </label>
+          <label class="check"><input type="checkbox" id="vision"> تحلیل تصویر و صفحه (مدل بینایی)</label>
+          <label class="check"><input type="checkbox" id="autoSkills"> مهارت‌های خودکار</label>
+        </div>
+
+        <div class="box">
+          <h3>🔊 صدا</h3>
+          <label class="check"><input type="checkbox" id="ttsEnabled"> خواندن پاسخ‌ها با صدا</label>
+          <label class="check"><input type="checkbox" id="ttsAuto"> خواندن خودکار هر پاسخ</label>
+          <label class="field">
+            <span>موتور صدا</span>
+            <select id="ttsEngine">
+              <option value="auto">خودکار (بهترین موجود)</option>
+              <option value="edge">Edge Neural (نیاز به edge-tts)</option>
+              <option value="sapi">SAPI ویندوز (آفلاین)</option>
+              <option value="espeak">espeak</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>موتور تبدیل گفتار به متن</span>
+            <select id="sttEngine">
+              <option value="auto">خودکار</option>
+              <option value="whisper_api">Whisper API</option>
+              <option value="faster_whisper">faster-whisper (آفلاین)</option>
+              <option value="windows">تشخیص گفتار ویندوز</option>
+            </select>
+          </label>
+          <div class="row">
+            <button class="ghost-btn" id="testVoice">🔈 تست صدا</button>
+            <span class="muted" id="voiceInfo"></span>
+          </div>
+        </div>
+
+        <div class="box">
+          <h3>🧩 سیستم</h3>
+          <div class="kv" id="sysInfo"></div>
+          <div class="row wrap">
+            <button class="ghost-btn" id="openData">📂 پوشه‌ی داده‌ها</button>
+            <button class="ghost-btn" id="exportChat">⬇️ خروجی گفت‌وگو</button>
+            <button class="danger-btn" id="shutdownApp">⏻ بستن دستیار</button>
+          </div>
+        </div>
+
+        <div class="box wide">
+          <h3>🧠 شخصیت و دستور سیستمی</h3>
+          <textarea id="systemPrompt" class="input" rows="6" placeholder="مثلاً: تو دستیار من هستی، خودمانی حرف بزن و کوتاه جواب بده…"></textarea>
+          <div class="row"><button class="primary-btn" id="savePrompt">ذخیره‌ی شخصیت</button></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- confirm modal -->
+<div class="modal-backdrop" id="confirmModal" hidden>
+  <div class="modal">
+    <div class="modal-icon">⚠️</div>
+    <h3 id="confirmTitle">اجازه می‌دهی؟</h3>
+    <p id="confirmDetail" class="muted"></p>
+    <pre class="args" id="confirmArgs"></pre>
+    <div class="row end">
+      <button class="ghost-btn" id="confirmNo">نه، انجام نده</button>
+      <button class="primary-btn" id="confirmYes">آره، انجام بده</button>
+    </div>
+  </div>
+</div>
+
+<!-- image lightbox -->
+<div class="modal-backdrop" id="lightbox" hidden><img id="lightboxImg" alt=""></div>
+
+<div class="toast-wrap" id="toasts"></div>
+<input type="file" id="filePicker" accept="image/*" hidden>
+<script src="/app.js"></script>
+</body>
+</html>
